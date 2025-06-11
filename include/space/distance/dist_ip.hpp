@@ -24,7 +24,7 @@ namespace alaya {
 
 FAST_BEGIN
 template <typename DataType = float, typename DistanceType = float>
-inline auto ip_sqr(DataType *x, DataType *y, size_t dim) -> DistanceType {
+inline auto ip_sqr(DataType *x, DataType *y, size_t dim) -> DistanceType { // 普通内积运算
   DistanceType sum = 0;
   for (size_t i = 0; i < dim; ++i) {
     sum += x[i] * y[i];
@@ -39,13 +39,14 @@ inline auto ip_sqr_sq4(const uint8_t *encoded_x, const uint8_t *encoded_y, size_
                        const DataType *min, const DataType *max) -> DistanceType {
   DistanceType sum = 0;
 
-  for (size_t i = 0; i < dim; i += 2) {
+  for (size_t i = 0; i < dim; i += 2) { // 每个byte存了两维的量化数据,所以i+=2
+    //应该分x1,x2高低8位都要算
     auto x = (encoded_x[i] >> 4) & 0x0F;
     auto y = encoded_y[i] & 0x0F;
-    sum += (x * (max[i] - min[i]) + min[i]) * (y * (max[i] - min[i]) + min[i]);
+    sum += (x * (max[i] - min[i]) + min[i]) * (y * (max[i] - min[i]) + min[i]); // x是一个[0,15]的整数,想算原内积ip(损失精度版),sum应该除于一个15*15，只是比大小就不用
   }
 
-  return -sum;
+  return -sum; // 最大内积问题转换为最小化负内积问题
 }
 FAST_END
 
@@ -57,10 +58,10 @@ inline auto ip_sqr_sq8(const uint8_t *encoded_x, const uint8_t *encoded_y, size_
 
   for (size_t i = 0; i < dim; i += 1) {
     sum +=
-        (encoded_x[i] * (max[i] - min[i]) + min[i]) * (encoded_y[i] * (max[i] - min[i]) + min[i]);
+        (encoded_x[i] * (max[i] - min[i]) + min[i]) * (encoded_y[i] * (max[i] - min[i]) + min[i]); // 同上,想算原内积ip(损失精度版),sum应该除于一个255*255,只是比大小就不用
   }
 
-  return -sum;
+  return -sum; // 最大内积问题转换为最小化负内积问题
 }
 FAST_END
 

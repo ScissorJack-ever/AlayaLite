@@ -53,7 +53,7 @@ class GraphUpdateJob {
     space_->insert(query);
 
     for (IDType i = 0; i < graph_->max_nbrs_; i++) {
-      auto invert_node = search_results[i];
+      auto invert_node = search_results[i]; // invert? insert吧
 
       if (invert_node != -1) {
         job_context_->inserted_edges_[invert_node].push_back(node_id);
@@ -104,23 +104,24 @@ class GraphUpdateJob {
   auto update(IDType node_id) -> void {
     std::unordered_set<IDType> candidate_nbrs;
     auto current_edges = graph_->edges(node_id);
-    for (IDType i = 0; i < graph_->max_nbrs_; i++) {
+    for (IDType i = 0; i < graph_->max_nbrs_; i++) { // 遍历node_id的neighbors(nbr)
       auto nbr = current_edges[i];
       if (nbr == -1) {
         break;
       }
-      if (job_context_->removed_vertices_.find(nbr) != job_context_->removed_vertices_.end()) {
+      if (job_context_->removed_vertices_.find(nbr) != job_context_->removed_vertices_.end()) { // 这是为了用被删节点nbr的邻居替代nbr本身 ，保持图连通性。
         for (auto &second_hop_nbr : job_context_->removed_node_nbrs_.at(nbr)) {
           candidate_nbrs.insert(second_hop_nbr);
         }
       }
-      candidate_nbrs.insert(nbr);
+      candidate_nbrs.insert(nbr); // 无论nbr是否删除，加回来(反正set自带去重)
     }
-    for (auto inserted_nbr : job_context_->inserted_edges_.at(node_id)) {
+
+    for (auto inserted_nbr : job_context_->inserted_edges_.at(node_id)) { // node_id已记录被插入的点也加入candidate_nbr
       candidate_nbrs.insert(inserted_nbr);
     }
     auto handler = space_->get_query_computer(node_id);
-    LinearPool<DistanceType, IDType> pool(space_->get_data_num(), graph_->max_nbrs_);
+    LinearPool<DistanceType, IDType> pool(space_->get_data_num(), graph_->max_nbrs_); // 用来选出最近的 graph_->max_nbrs_ 个邻居
     for (auto &nbr : candidate_nbrs) {
       auto dist = handler(nbr);
       pool.insert(nbr, dist);

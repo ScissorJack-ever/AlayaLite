@@ -42,7 +42,7 @@ struct IndexTypeMap {
         return val;
       }
     }
-    __builtin_unreachable();
+    __builtin_unreachable(); // 保证是自己调用，所以一定能查到值
   }
 };
 

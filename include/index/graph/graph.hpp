@@ -30,6 +30,7 @@
 #include "../../utils/log.hpp"
 #include "overlay_graph.hpp"
 #include "storage/sequential_storage.hpp"
+
 namespace alaya {
 
 constexpr static int kEmptyId = -1;  ///< The id of empty node.
@@ -41,8 +42,9 @@ constexpr static int kEmptyId = -1;  ///< The id of empty node.
  * @tparam NodeIDType The data type for storing IDs of nodes.
  * @tparam EdgeIDType The data type for storing IDs of edges.
  */
+ // 应该是typename DataStorage = SequentialStorage<DataType, NodeIDType>
 template <typename DataType = float, typename NodeIDType = uint32_t,
-          typename DataStorage = SequentialStorage<NodeIDType, NodeIDType>>
+          typename DataStorage = SequentialStorage<DataType, NodeIDType>>
 struct Graph {
   using EdgeIDType = uint32_t;
   constexpr static NodeIDType kEmptyId = -1;
@@ -52,7 +54,9 @@ struct Graph {
   EdgeIDType max_nbrs_;       ///< max_nbrs_ is the maximum number of neighbors
   DataStorage data_storage_;  ///< the data of the grpah: each node has max_nbrs_ edges, i.e., the
                               ///< node ids of its neighbors
-  std::unique_ptr<OverlayGraphType> overlay_graph_ = nullptr;  ///< the overlay raph of HNSW
+  // 没有地方设置这个graph啊,一直都是nullptr...(默认public,直接赋值)
+  std::unique_ptr<OverlayGraphType> overlay_graph_ = nullptr;  ///< the overlay graph of HNSW
+  // 也没有地方设置，一直为空...
   std::vector<NodeIDType> eps_;                                ///< the entry points
 
   // bool include_raw_data_;  ///< include_raw_data_ is a flag to indicate whether the raw data is
@@ -62,8 +66,8 @@ struct Graph {
   Graph() = default;
 
   Graph(NodeIDType max_nodes, EdgeIDType max_nbrs) : max_nodes_(max_nodes), max_nbrs_(max_nbrs) {
-    uint32_t item_size = max_nbrs * sizeof(NodeIDType);
-    data_storage_.init(item_size, max_nodes, -1);
+    uint32_t item_size = max_nbrs * sizeof(NodeIDType); //此处一个item就是某个节点所有neighbors的id
+    data_storage_.init(item_size, max_nodes, -1); //-1是初始填充值
   }
 
   Graph(const Graph &) = delete;
@@ -143,7 +147,7 @@ struct Graph {
    * @param dist_func The computer function of distance computation.
    */
   template <typename CandPoolType, typename DistFuncType>
-  void initialize_search(CandPoolType &cand_pool, const DistFuncType &dist_func) const {
+  void initialize_search(CandPoolType &cand_pool, const DistFuncType &dist_func) const { //DistFuncType应该是重载()就可以
     if (overlay_graph_) {
       overlay_graph_->initialize(cand_pool, dist_func);
     } else {
@@ -227,7 +231,7 @@ struct Graph {
     //   reader.read(reinterpret_cast<char *>(base_data_), max_nodes_ * dim_ * sizeof(DataType));
     // }
 
-    if (reader.peek() != EOF) {
+    if (reader.peek() != EOF) { //查看到下一个字符是结束字符
       overlay_graph_ = std::make_unique<OverlayGraph<NodeIDType>>(max_nodes_, max_nbrs_);
       overlay_graph_->load(reader);
     }

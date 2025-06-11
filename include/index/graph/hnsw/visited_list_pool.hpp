@@ -26,9 +26,9 @@ using vl_type = uint16_t;
 
 class VisitedList {
  public:
-  vl_type cur_v_;
-  vl_type *mass_;
-  uint32_t numelements_;
+  vl_type cur_v_; // 当前标记值，表示当前这次搜索的“版本号”或“轮次标识”，避免每次搜索都重新初始化数组。
+  vl_type *mass_; // 动态数组，用来记录每个节点是否被访问过（通过比较 cur_v_ 和对应位置的值）。
+  uint32_t numelements_; // 图中节点的最大数量，决定了 mass_ 数组的大小。
 
   explicit VisitedList(int numelements1) {
     cur_v_ = -1;
@@ -45,7 +45,8 @@ class VisitedList {
   }
 
   ~VisitedList() { delete[] mass_; }
-};
+}; // visited list
+
 ///////////////////////////////////////////////////////////
 //
 // Class for multi-threaded pool-management of VisitedLists
@@ -55,7 +56,7 @@ class VisitedList {
 class VisitedListPool {
   std::deque<VisitedList *> pool_;
   std::mutex poolguard_;
-  int numelements_;
+  int numelements_; // 每个 VisitedList 中维护的数组大小。
 
  public:
   VisitedListPool(int initmaxpools, int numelements1) {
@@ -92,6 +93,6 @@ class VisitedListPool {
       delete rez;
     }
   }
-};
+}; // visited list pool
 
 }  // namespace alaya

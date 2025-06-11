@@ -74,7 +74,7 @@ class OverlayGraph {
    * @param j Index of the edge.
    * @return NodeIDType
    */
-  auto at(uint32_t level, NodeIDType i, EdgeIDType j) const -> NodeIDType {
+  auto at(uint32_t level, NodeIDType i, EdgeIDType j) const -> NodeIDType {  //应该是返回EdgeIDType类型
     return lists_[i][(level - 1) * max_nbrs_ + j];
   }
 
@@ -107,7 +107,7 @@ class OverlayGraph {
    * @param i Index of the node.
    * @return NodeIDType The edges of the node,  i.e., the node ids of its neighbours.
    */
-  auto edges(uint32_t level, NodeIDType u) -> NodeIDType * {
+  auto edges(uint32_t level, NodeIDType u) -> NodeIDType * { //level从1开始算，所以要减去1
     return lists_[u].data() + (level - 1) * max_nbrs_;
   }
 
@@ -120,17 +120,17 @@ class OverlayGraph {
    * @param dist_func The computer function of distance computation.
    */
   template <typename CandPoolType, typename DistFuncType>
-  void initialize(CandPoolType &cand_pool, const DistFuncType &dist_func) const {
+  void initialize(CandPoolType &cand_pool, const DistFuncType &dist_func) const { //ep就是entry points
     uint32_t u = ep_;
     auto cur_dist = dist_func(u);
-    for (int level = levels_[u]; level > 0; --level) {
+    for (int level = levels_[u]; level > 0; --level) { //高层往下遍历，level∈[1,levels[u]]
       bool changed = true;
-      while (changed) {
+      while (changed) { //这一层有cur_dist的变更就往下继续
         changed = false;
         auto list = edges(level, u);
-        for (int i = 0; i < max_nbrs_ && list[i] != -1; ++i) {
+        for (int i = 0; i < max_nbrs_ && list[i] != -1; ++i) { //找此层是否有比上层Min_dist更小的dist
           int v = list[i];
-          auto dist = dist_func(v);
+          auto dist = dist_func(v); //可能是个operator()，类中已包含对另一点的定义
           if (dist < cur_dist) {
             cur_dist = dist;
             u = v;
@@ -139,7 +139,7 @@ class OverlayGraph {
         }
       }
     }
-    cand_pool.insert(u, cur_dist);
+    cand_pool.insert(u, cur_dist); // 记录从上到下dist最小的点，直至不再变化
     cand_pool.vis_.set(u);
   }
 

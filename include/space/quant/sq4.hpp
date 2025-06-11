@@ -85,9 +85,9 @@ struct SQ4Quantizer {
                                            std::numeric_limits<DataType>::max()};
     };
 
-    auto [min_value, max_value] = get_min_max_value();
+    auto [min_value, max_value] = get_min_max_value(); // 此数据类型所能达到的极限值
 
-    min_vector_ = std::vector<DataType>(dim, max_value);
+    min_vector_ = std::vector<DataType>(dim, max_value); // 这样才能正常更新min
     max_vector_ = std::vector<DataType>(dim, min_value);
   }
 
@@ -97,13 +97,13 @@ struct SQ4Quantizer {
    * @param item_cnt Number of data items in the input array
    */
   void fit(const DataType *data, size_t item_cnt) {
-    for (size_t vector_idx = 0; vector_idx < item_cnt; vector_idx++) {
-      for (uint32_t dim_idx = 0U; dim_idx < dim_; dim_idx++) {
-        auto value = *(data + vector_idx * dim_ + dim_idx);
-        if (value < min_vector_[dim_idx]) {
+    for (size_t vector_idx = 0; vector_idx < item_cnt; vector_idx++) { // 遍历向量（行）
+      for (uint32_t dim_idx = 0U; dim_idx < dim_; dim_idx++) { // 遍历dimension (列)
+        auto value = *(data + vector_idx * dim_ + dim_idx); // 二维数组一维化
+        if (value < min_vector_[dim_idx]) { // 找当前列的最小值
           min_vector_[dim_idx] = value;
         }
-        if (value > max_vector_[dim_idx]) {
+        if (value > max_vector_[dim_idx]) { // 找当前列的最大值
           max_vector_[dim_idx] = value;
         }
       }
@@ -117,7 +117,7 @@ struct SQ4Quantizer {
    * @param max Maximum value of the range
    * @return 4-bit quantized value (0-15)
    */
-  auto quantize(DataType value, DataType min, DataType max) const -> uint8_t {
+  auto quantize(DataType value, DataType min, DataType max) const -> uint8_t { // 4bit能表示的最小值：0x00; 最大值: 0x0F
     if (max == min) {
       return 0x00;
     }
@@ -128,7 +128,7 @@ struct SQ4Quantizer {
       return 0x00;
     }
     auto scaled = (static_cast<float>(value) - min) / (max - min);
-    return static_cast<uint8_t>(scaled * 15);
+    return static_cast<uint8_t>(scaled * 15); // [min,max]->[0,15]等比例放缩(显然比起sq8有更多精度损失)
   }
 
   /**
@@ -138,13 +138,15 @@ struct SQ4Quantizer {
    */
   void encode(const DataType *raw_data,
               uint8_t *const encoded_data) const {  // NOLINT
-    for (uint32_t i = 0; i < dim_; i += 2) {
+    // raw_data应该传入某一位置的data，是指向一整个向量的指针
+    for (uint32_t i = 0; i < dim_; i += 2) { //两维一组处理，结果两个4bit一起存在一个8bit里
       uint8_t first = quantize(raw_data[i], min_vector_[i], max_vector_[i]);  // NOLINT
       uint8_t second = 0;
-      if (i + 1 < dim_) {
+      if (i + 1 < dim_) { 
         second = quantize(raw_data[i + 1], min_vector_[i + 1], max_vector_[i + 1]);
       }
-      encoded_data[i / 2] = (first << 4) | second;
+      // 最后encoded_data长度只有 ceil(dim/2) , 就是前后两个4-bit quantization code的拼接
+      encoded_data[i / 2] = (first << 4) | second; 
     }
   }
 

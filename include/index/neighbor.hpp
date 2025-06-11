@@ -69,8 +69,9 @@ inline auto insert_into_pool(Neighbor<IDType> *addr, int K, Neighbor<IDType> nn)
   // find the location to insert
   int left = 0;
   int right = K - 1;
+  // 两种极端情况
   if (addr[left].distance_ > nn.distance_) {
-    memmove(&addr[left + 1], &addr[left], K * sizeof(Neighbor<IDType>));
+    memmove(&addr[left + 1], &addr[left], K * sizeof(Neighbor<IDType>)); //整体右移，让出最小值位置
     addr[left] = nn;
     return left;
   }
@@ -78,25 +79,28 @@ inline auto insert_into_pool(Neighbor<IDType> *addr, int K, Neighbor<IDType> nn)
     addr[K] = nn;
     return K;
   }
+
   while (left < right - 1) {
     int mid = (left + right) / 2;
     if (addr[mid].distance_ > nn.distance_) {
       right = mid;
-    } else {
+    } else { //addr[mid].distance_ <= nn.distance_
       left = mid;
     }
-  }
-  // check equal ID
+  } // 退出while时,left与right刚好挨着,有addr[left]<=nn.distance_<addr[right]
 
-  while (left > 0) {
-    if (addr[left].distance_ < nn.distance_) {
+  // check equal ID
+  while (left > 0) { 
+    if (addr[left].distance_ < nn.distance_) { //left向左走，到刚好有addr[left].distance_ < nn.distance_的位置
       break;
     }
-    if (addr[left].id_ == nn.id_) {
+    if (addr[left].id_ == nn.id_) { // duplicate id, insert failed
       return K + 1;
     }
     left--;
   }
+
+  //left==0时也要判断duplicate id, nn.dist==addr[right]的情况也是
   if (addr[left].id_ == nn.id_ || addr[right].id_ == nn.id_) {
     return K + 1;
   }

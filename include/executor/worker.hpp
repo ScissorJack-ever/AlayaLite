@@ -83,7 +83,7 @@ class Worker : public std::enable_shared_from_this<Worker> {
    */
   void join() {
     active_ = false;
-    thread_.join();
+    thread_.join(); // 等待thread_完成
   }
 
   auto operator=(const Worker &) -> Worker & = delete;
@@ -111,25 +111,25 @@ class Worker : public std::enable_shared_from_this<Worker> {
     uint32_t navigator = 0;
 
     while (true) {
-      uint32_t idx = navigator++ % local_task_cnt_;
+      uint32_t idx = navigator++ % local_task_cnt_; // navigator轮询任务
       auto &handle = local_tasks_[idx];
 
       if (handle == nullptr) {
-        auto success = task_queue_->pop(handle);
+        auto success = task_queue_->pop(handle); // 要新task
         if (!success) {
-          if (total_finish_cnt_->load() == total_task_cnt_->load()) {
+          if (total_finish_cnt_->load() == total_task_cnt_->load()) { // 所有工作都做完了
             break;
           }
           continue;
         }
       }
-      handle.resume();
+      handle.resume(); //需手动调用开始执行协程
       if (handle.done()) {
         handle = nullptr;
         total_finish_cnt_->fetch_add(1);
       } else {
       }
-    }
+    } // while
   }
 
   /**

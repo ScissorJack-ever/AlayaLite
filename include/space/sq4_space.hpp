@@ -75,7 +75,7 @@ class SQ4Space {
    */
   SQ4Space(IDType capacity, size_t dim, MetricType metric)
       : capacity_(capacity), dim_(dim), metric_(metric), quantizer_(dim) {
-    data_size_ = ((dim + 1) / 2) * sizeof(uint8_t);
+    data_size_ = ((dim + 1) / 2) * sizeof(uint8_t); // (dim+1)/2 即 ceil(dim/2) ,也即一个向量量化后应占字节数
     data_storage_.init(data_size_, capacity);
     set_metric_function();
   }
@@ -253,14 +253,14 @@ class SQ4Space {
      * @param query Pointer to the query data
      */
     QueryComputer(const SQ4Space &distance_space, const DataType *query)
-        : distance_space_(distance_space) {
-      size_t aligned_size = do_align(distance_space_.get_data_size(), 64);
-      query_ = static_cast<uint8_t *>(std::aligned_alloc(64, aligned_size));
+        : distance_space_(distance_space) { // 以待量化query来初始化
+      size_t aligned_size = do_align(distance_space_.get_data_size(), 64); // 大小为64的整数倍
+      query_ = static_cast<uint8_t *>(std::aligned_alloc(64, aligned_size)); // aligned_alloc只保证起始地址为64的整数倍，还是要传aligned_size
       distance_space.get_quantizer().encode(query, query_);
     }
 
     QueryComputer(const SQ4Space &distance_space, const IDType id)
-        : distance_space_(distance_space) {
+        : distance_space_(distance_space) { // 以读取已量化query来初始化
       size_t aligned_size = do_align(distance_space_.get_data_size(), 64);
       query_ = static_cast<uint8_t *>(std::aligned_alloc(64, aligned_size));
       std::memcpy(query_, distance_space_.get_data_by_id(id), distance_space_.get_data_size());
@@ -276,12 +276,13 @@ class SQ4Space {
      * @param u ID of the data point to compare with the query
      * @return The calculated distance
      */
-    auto operator()(IDType u) const -> DistanceType {
+    auto operator()(IDType u) const -> DistanceType { // 就是在调用距离度量方法
+      //应该要判断is_valid吧
       return distance_space_.distance_calu_func_(
           query_, distance_space_.get_data_by_id(u), distance_space_.get_dim(),
           distance_space_.get_quantizer().get_min(), distance_space_.get_quantizer().get_max());
     }
-  };
+  }; // struct QueryComputer
 
   /**
    * @brief Prefetch data into cache by ID to optimize memory access
@@ -299,6 +300,7 @@ class SQ4Space {
     mem_prefetch_l1(address, data_size_ / 64);
   }
 
+  //实例化刚定义的struct QueryComputer
   auto get_query_computer(const DataType *query) { return QueryComputer(*this, query); }
 
   auto get_query_computer(const IDType id) { return QueryComputer(*this, id); }

@@ -47,13 +47,14 @@ struct NndescentImpl {
     Nhood(std::mt19937 &rng, int s, int64_t N) {
       max_edge_ = s;
       nn_new_.resize(s * 2);
+      // 随机初始邻居
       gen_random(rng, nn_new_.data(), nn_new_.size(), N);
     }
 
     auto operator=(const Nhood &other) -> Nhood & {
       max_edge_ = other.max_edge_;
-      std::copy(other.nn_new.begin(), other.nn_new.end(), std::back_inserter(nn_new_));
-      nn_new_.reserve(other.nn_new.capacity());
+      std::copy(other.nn_new_.begin(), other.nn_new_.end(), std::back_inserter(nn_new_));
+      nn_new_.reserve(other.nn_new_.capacity());
       candidate_pool_.reserve(other.candidate_pool_.capacity());
       return *this;
     }
@@ -74,21 +75,22 @@ struct NndescentImpl {
     void insert(IDType id, DistanceType dist) {
       std::scoped_lock guard(lock_);
 
-      if (dist > candidate_pool_.front().distance_) {
+      if (dist > candidate_pool_.front().distance_) { // candidate_pool_.front() 是堆顶元素（即当前最大距离）
         return;
       }
 
-      for (int i = 0; i < candidate_pool_.size(); i++) {
+      for (int i = 0; i < candidate_pool_.size(); i++) { // check duplicate
         if (candidate_pool_[i].id_ == id) {
           return;
         }
       }
 
-      if (candidate_pool_.size() < candidate_pool_.capacity()) {
+      if (candidate_pool_.size() < candidate_pool_.capacity()) { // candidate_pool是个vector
         candidate_pool_.push_back({id, dist, true});
         std::push_heap(candidate_pool_.begin(), candidate_pool_.end());
       } else {
-        std::pop_heap(candidate_pool_.begin(), candidate_pool_.end());
+        std::pop_heap(candidate_pool_.begin(), candidate_pool_.end()); //去掉最差元素，注意：它并不会删除最后一个元素，所以back()安全覆盖
+        // 先放到back()再push_heap调整
         candidate_pool_.back() = {id, dist, true};
         std::push_heap(candidate_pool_.begin(), candidate_pool_.end());
       }
@@ -101,19 +103,19 @@ struct NndescentImpl {
     void join(T callback) const {
       for (IDType i : nn_new_) {
         for (IDType j : nn_new_) {
-          if (i < j) {
+          if (i < j) { // 保证不重复callback
             callback(i, j);
           }
         }
 
-        for (IDType j : nn_old_) {
+        for (IDType j : nn_old_) { // 对old neighbors也要
           callback(i, j);
         }
       }
     }
-  };
+  }; // Nhood
 
-  std::vector<Nhood> graph_;                  ///<  graph
+  std::vector<Nhood> graph_;                  ///< graph
   std::shared_ptr<DistanceSpaceType> space_;  ///< space
   uint32_t dim_;                              ///< dimension of the vectors
   IDType vector_num_;                         ///< number of vectors
@@ -148,18 +150,18 @@ struct NndescentImpl {
     for (IDType i = 0; i < vector_num_; ++i) {
       std::sort(graph_[i].candidate_pool_.begin(), graph_[i].candidate_pool_.end());
       for (int j = 0; j < max_nbrs_; j++) {
-        final_graph->at(i, j) = graph_[i].candidate_pool_[j].id_;
+        final_graph->at(i, j) = graph_[i].candidate_pool_[j].id_; // graph_是个vector
       }
     }
     final_graph->eps_.push_back(0);
-    std::vector<Nhood>().swap(graph_);
+    std::vector<Nhood>().swap(graph_); // 清空 vector 并释放内存
 
     return final_graph;
   }
   /**
    * @brief Initialize the graph.
    */
-  void init_graph() {
+  void init_graph() { // 是 NN-Descent 的启动阶段，负责为每个节点生成初始邻居并构建候选池
     graph_.reserve(vector_num_);
 
     // init the graph by random generator.
@@ -179,16 +181,19 @@ struct NndescentImpl {
       IDType per_core_num = (vector_num_ + num_cores - 1) / num_cores;
       for (int thread_id = 0; thread_id < num_cores; thread_id++) {
         pool.enqueue([thread_id, &rng, per_core_num, this]() {
+          // 处理start~end
           IDType start = thread_id * per_core_num;
           IDType end = std::min((thread_id + 1) * per_core_num, vector_num_);
 
           for (; start < end; start++) {
             std::vector<IDType> tmp(selected_sample_num_);
+            // 使用给定的随机数生成器 rng，为一个数组 addr 生成一组 “近似唯一且均匀分布”的 ID 序列。
+            // 结果存储在addr中 
             gen_random(rng, tmp.data(), selected_sample_num_, vector_num_);
 
             for (int j = 0; j < selected_sample_num_; j++) {
               IDType id = tmp[j];
-              if (id == start) {
+              if (id == start) { // 随机到自己了，自己不能当自己neighbor
                 continue;
               }
 
@@ -221,7 +226,7 @@ struct NndescentImpl {
    * @note The algorithm uses a random number generator seeded with a combination of the random seed
    * and the number of hardware threads to ensure reproducibility and randomness.
    */
-  void descent() {
+  void descent() { // 是迭代优化阶段，通过多轮 join() 和 update() 不断改进图结构，提高邻居的准确性和召回率。
     uint32_t num_eval = std::min(static_cast<uint64_t>(100), static_cast<uint64_t>(vector_num_));
     std::vector<IDType> eval_points(num_eval);
 
@@ -257,11 +262,12 @@ struct NndescentImpl {
     IDType per_num_cores = (vector_num_ + num_cores - 1) / num_cores;
     for (int i = 0; i < num_cores; i++) {
       thread_pool.enqueue([this, i, per_num_cores]() {
+        // 将整个数据集划分为多个块，每个线程处理一部分节点（start 到 end）
         IDType start = i * per_num_cores;
         IDType end = std::min((i + 1) * per_num_cores, vector_num_);
 
         for (; start < end; start++) {
-          graph_[start].join([this](IDType item1, IDType item2) {
+          graph_[start].join([this](IDType item1, IDType item2) { // 每个节点与邻居相互把nn_new_与nn_old_集中到各自的candidate_pool中
             if (item1 != item2) {
               DistanceType dist = space_->get_distance(item1, item2);
               graph_[item1].insert(item2, dist);
@@ -294,6 +300,7 @@ struct NndescentImpl {
     unsigned int num_cores = std::thread::hardware_concurrency();
     ThreadPool thread_pool(num_cores);
 
+    // 1. Clears the new and old neighbor lists for each node.
     IDType per_num_cores = (vector_num_ + num_cores - 1) / num_cores;
     for (int i = 0; i < num_cores; i++) {
       thread_pool.enqueue([i, this, per_num_cores]() {
@@ -307,29 +314,33 @@ struct NndescentImpl {
 
     thread_pool.reset_task();
 
+    // 2. Sorts and resizes the candidate pool for each node.
     for (int i = 0; i < num_cores; i++) {
       thread_pool.enqueue([i, this, per_num_cores]() {
         for (IDType j = i * per_num_cores; j < (i + 1) * per_num_cores && j < vector_num_; j++) {
           auto &nn = graph_[j];
           std::sort(nn.candidate_pool_.begin(), nn.candidate_pool_.end());
 
-          if (nn.candidate_pool_.size() > candidate_pool_size_) {
+          if (nn.candidate_pool_.size() > candidate_pool_size_) { // 多了保留topk min
             nn.candidate_pool_.resize(candidate_pool_size_);
           }
-          nn.candidate_pool_.reserve(candidate_pool_size_);
+          nn.candidate_pool_.reserve(candidate_pool_size_); // 少了就预留对应空间
 
+          // nn.max_edge_:上一轮迭代中保留的邻居数量；
+          // selected_sample_num_：本轮希望新增的样本数；已设置为常量10
+          // candidate_pool_.size()：当前候选池中的邻居总数；
           auto maxl = std::min(nn.max_edge_ + selected_sample_num_,
                                static_cast<uint32_t>(nn.candidate_pool_.size()));
-          int c = 0;
-          int l = 0;
+          int c = 0; // 统计“新”邻居的数量
+          int l = 0; // 遍历指针
 
           while ((l < maxl) && (c < selected_sample_num_)) {
-            if (nn.candidate_pool_[l].flag_) {
+            if (nn.candidate_pool_[l].flag_) { // The flag identify the current point is visited or not.
               ++c;
             }
             ++l;
           }
-          nn.max_edge_ = l;
+          nn.max_edge_ = l; // <= maxl
         }
       });
     }
@@ -341,6 +352,7 @@ struct NndescentImpl {
 
       thread_pool.reset_task();
 
+      // 3. Updates the neighbor lists based on the candidate pool.
       for (int i = 0; i < num_cores; ++i) {
         thread_pool.enqueue([&, i, per_num_cores]() {
           for (auto j = per_num_cores * i; j < per_num_cores * (i + 1) && j < vector_num_; ++j) {
@@ -350,15 +362,18 @@ struct NndescentImpl {
 
             for (int l = 0; l < node.max_edge_; ++l) {
               auto &nn = node.candidate_pool_[l];
-              auto &other = graph_[nn.id_];
+              auto &other = graph_[nn.id_]; // candid的nhood
 
-              if (nn.flag_) {
-                nn_new.push_back(nn.id_);
-                if (nn.distance_ > other.candidate_pool_.back().distance_) {
+              if (nn.flag_) { // flag = true 是还需访问的意思？
+                nn_new.push_back(nn.id_); // nn_new_拿取candidate_pool 中新nn（核心来源）
+                if (nn.distance_ > other.candidate_pool_.back().distance_) { 
+                  // 发现自己与邻居nn的距离比nn自己候选池中最远的距离还大；
+                  // 尝试将自己的 ID 插入对方的反向邻居列表中，这样对方在下一轮更新时就能知道这个潜在连接，并可能反过来连接自己。
                   std::scoped_lock guard(other.lock_);
-                  if (other.rnn_new_.size() < radius_) {
+                  // the radius of the neighborhood(100)
+                  if (other.rnn_new_.size() < radius_) { // 有空位直接插入
                     other.rnn_new_.push_back(j);
-                  } else {
+                  } else { // 随机替换
                     int pos = rng() % radius_;
                     other.rnn_new_[pos] = j;
                   }
@@ -388,13 +403,14 @@ struct NndescentImpl {
     {
       thread_pool.reset_task();
 
+      // 4. Merges the reverse neighbor lists into the main neighbor lists.
       for (int i = 0; i < num_cores; ++i) {
         thread_pool.enqueue([this, i, per_num_cores]() {
           for (auto j = i * per_num_cores; j < i * per_num_cores + per_num_cores && j < vector_num_;
                ++j) {
-            auto &nn_new = graph_[j].nn_new_;
+            auto &nn_new = graph_[j].nn_new_; // 自己发现的
             auto &nn_old = graph_[j].nn_old_;
-            auto &rnn_new = graph_[j].rnn_new_;
+            auto &rnn_new = graph_[j].rnn_new_; // 别人推荐的
             auto &rnn_old = graph_[j].rnn_old_;
             nn_new.insert(nn_new.end(), rnn_new.begin(), rnn_new.end());
             nn_old.insert(nn_old.end(), rnn_old.begin(), rnn_old.end());
@@ -425,7 +441,7 @@ struct NndescentImpl {
     unsigned int num_cores = std::thread::hardware_concurrency();
     ThreadPool thread_pool(num_cores);
     auto per_num_cores = (eval_set.size() + num_cores - 1) / num_cores;
-    for (unsigned int thread_id = 0; thread_id < num_cores; ++thread_id) {
+    for (unsigned int thread_id = 0; thread_id < num_cores; ++thread_id) { 
       thread_pool.enqueue([thread_id, per_num_cores, &eval_set, &eval_gt, this]() {
         for (int j = thread_id * per_num_cores;
              j < (thread_id + 1) * per_num_cores && j < eval_set.size(); ++j) {
@@ -467,7 +483,7 @@ struct NndescentImpl {
     float mean_acc = 0.0F;
     for (int i = 0; i < eval_set.size(); i++) {
       float acc = 0;
-      std::vector<Neighbor<IDType>> &g = graph_[eval_set[i]].candidate_pool_;
+      std::vector<Neighbor<IDType>> &g = graph_[eval_set[i]].candidate_pool_; // 生成的NN-Descent结果
       const std::vector<IDType> &v = eval_gt[i];
       for (int j = 0; j < g.size(); j++) {
         for (const auto &id : v) {

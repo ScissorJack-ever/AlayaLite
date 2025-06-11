@@ -81,7 +81,7 @@ class DynamicBitset {
    * @param pos The position of the bit to reset
    */
   void reset(size_t pos) { data_[pos / 64] &= ~(1ULL << (pos % 64)); }
-};
+}; // DynamicBitset
 
 /**
  * @brief A sparse bitset implementation using an unordered set.
@@ -121,7 +121,7 @@ class SparseBitset {
    * @param pos The position of the bit to reset
    */
   void reset(size_t pos) { set_bits_.erase(pos); }
-};
+}; // SparseBitset
 
 /**
  * @brief A hierarchical bitset implementation for efficient "find first set" operations.
@@ -199,7 +199,7 @@ class HierarchicalBitset {
     }
     return -1;
   }
-};
+}; //HierarchicalBitset
 
 // todo test this class.
 template <typename DistanceType, typename IDType>
@@ -233,14 +233,14 @@ struct LinearPool {
     if (lo < cur_) {
       cur_ = lo;
     }
-    for (int i = 0; i < size_; i++) {
-      // LOG_INFO("i {} ,dist is {}", data_[i].id_, data_[i].distance_);
-    }
+    // for (int i = 0; i < size_; i++) {
+    //   LOG_INFO("i {} ,dist is {}", data_[i].id_, data_[i].distance_);
+    // }
     // LOG_INFO("cur is {} , size {}", cur_, size_);
     return true;
   }
 
-  void emplace_insert(IDType u, DistanceType dist) {
+  void emplace_insert(IDType u, DistanceType dist) { // 只是少了很多检查
     if (dist >= data_[size_ - 1].distance) {
       return;
     }
@@ -253,7 +253,7 @@ struct LinearPool {
   auto pop() -> IDType {
     set_checked(data_[cur_].id_);
     int pre = cur_;
-    while (cur_ < size_ && is_checked(data_[cur_].id_)) {
+    while (cur_ < size_ && is_checked(data_[cur_].id_)) { //cur_定位为后面还未checked的id,他们的distance比原来的cur大
       cur_++;
     }
 
@@ -267,14 +267,14 @@ struct LinearPool {
   auto size() const -> size_t { return size_; }
   auto capacity() const -> size_t { return capacity_; }
 
-  constexpr static int kMask = 2147483647;
-  auto get_id(IDType id) const -> IDType { return id & kMask; }
+  constexpr static int kMask = 2147483647; // 2^31 - 1 , 即连续31个1
+  auto get_id(IDType id) const -> IDType { return id & kMask; } // 最高位表示是否checked，返回低31位才是真id
   void set_checked(IDType &id) { id |= 1 << 31; }
-  auto is_checked(IDType id) -> bool { return (id >> 31 & 1) != 0; }
+  auto is_checked(IDType id) -> bool { return (id >> 31 & 1) != 0; } // id的最高位是1就是checked
 
-  size_t nb_, size_ = 0, cur_ = 0, capacity_;
+  size_t nb_, size_ = 0, cur_ = 0, capacity_;  // cur_是上一次插入位置
   std::vector<Neighbor<IDType, DistanceType>, AlignAlloc<Neighbor<IDType, DistanceType>>> data_;
   DynamicBitset vis_;
-};
+}; // Linear Pool
 
 }  // namespace alaya

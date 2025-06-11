@@ -29,6 +29,6 @@ inline auto do_align(uint32_t size, uint32_t align_num) -> uint32_t {
   }
 
   // Compute the aligned dimension
-  return ((size + align_num - 1) / align_num) * align_num;
+  return ((size + align_num - 1) / align_num) * align_num; //返回align_num的整数倍(刚好>=size)
 }
 }  // namespace alaya

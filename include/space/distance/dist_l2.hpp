@@ -47,7 +47,7 @@ inline auto l2_sqr_sq4(const uint8_t *encoded_x, const uint8_t *encoded_y, size_
     {
       auto x = encoded_x[i / 2] & 0x0F;
       auto y = encoded_y[i / 2] & 0x0F;
-      auto diff = (x - y) * (max[i] - min[i]) / 15.0F;
+      auto diff = (x - y) * (max[i] - min[i]) / 15.0F; // 还原原来数据，精度有损失
       sum += diff * diff;
     }
     {
@@ -71,7 +71,7 @@ inline auto l2_sqr_sq8(const uint8_t *encoded_x, const uint8_t *encoded_y, size_
   for (uint32_t i = 0; i < dim; i += 1) {
     auto x = encoded_x[i];
     auto y = encoded_y[i];
-    auto diff = (max[i] - min[i]) * (x - y) / 255.0F;
+    auto diff = (max[i] - min[i]) * (x - y) / 255.0F; // 还原原来数据，精度有损失
 
     sum += diff * diff;
   }

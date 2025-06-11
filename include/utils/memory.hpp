@@ -36,12 +36,12 @@ struct AlignAlloc {
   ValueType *ptr_ = nullptr;
   auto allocate(int n) -> ValueType * {
     if (n <= 1 << 14) {
-      int sz = (n * sizeof(ValueType) + 63) >> 6 << 6;
-      return ptr_ = static_cast<ValueType *>(std::aligned_alloc(64, sz));
+      int sz = (n * sizeof(ValueType) + 63) >> 6 << 6; //63D = 111111 ,然后清空低6位,低6位不为0则给高位补1。综上，应为向上取64的整数倍
+      return ptr_ = static_cast<ValueType *>(std::aligned_alloc(64, sz)); //确保开始地址是64整数倍
     }
     int sz = (n * sizeof(ValueType) + (1 << 21) - 1) >> 21 << 21;
     ptr_ = static_cast<ValueType *>(std::aligned_alloc(1 << 21, sz));
-    madvise(ptr_, sz, MADV_HUGEPAGE);
+    madvise(ptr_, sz, MADV_HUGEPAGE); //对这一段特定的虚拟内存区域的优化：减少页表开销和内存碎片
     return ptr_;
   }
 
@@ -52,7 +52,7 @@ struct AlignAlloc {
     using other = AlignAlloc<U>;
   };
   auto operator!=(const AlignAlloc &rhs) -> bool { return ptr_ != rhs.ptr_; }
-};
+}; // AlignAlloc
 
 inline auto alloc_2m(size_t nbytes) -> void * {
   size_t len = (nbytes + (1 << 21) - 1) >> 21 << 21;

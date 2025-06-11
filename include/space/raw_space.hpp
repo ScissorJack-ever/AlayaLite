@@ -121,7 +121,7 @@ class RawSpace {
    * @param data Pointer to the input data array, no padding between data points
    * @param item_cnt Number of data points
    */
-  void fit(const DataType *data, IDType item_cnt) {
+  void fit(const DataType *data, IDType item_cnt) { // 将已有的向量单位化
     item_cnt_ = item_cnt;
     for (IDType i = 0; i < item_cnt_; ++i) {
       // if the metric is cosine, normalize the query

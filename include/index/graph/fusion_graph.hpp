@@ -64,11 +64,12 @@ struct FusionGraphBuilder {
     auto secondary_graph = secondary_graph_builder->build_graph(thread_num);
 
     // Initialize the fusion graph with double the maximum number of neighbors
+    // 假设两个图中无duplicate,所以要两倍max_nbrs
     auto fusion_graph =
         std::make_unique<Graph<DataType, IDType>>(space_->get_capacity(), 2 * max_nbrs_);
 
     uint32_t max_edge = 0;
-    for (IDType i = 0; i < space_->get_data_num(); i++) {
+    for (IDType i = 0; i < space_->get_data_num(); i++) { //对每个节点，取两个图的并集Nei到fusion graph上
       uint32_t idx = 0;
       // Add neighbors from the primary graph
       for (IDType j = 0; j < max_nbrs_; j++) {
@@ -113,7 +114,7 @@ struct FusionGraphBuilder {
       final_graph->overlay_graph_ = std::move(primary_graph->overlay_graph_);
     } else if (secondary_graph->overlay_graph_ != nullptr) {
       final_graph->overlay_graph_ = std::move(secondary_graph->overlay_graph_);
-    } else {
+    } else { //两个图都没有overlay graph,就合并两个图的entry points（确认不duplicate?）
       for (int i = 0; i < primary_graph->eps_.size(); i++) {
         final_graph->eps_.push_back(primary_graph->eps_[i]);
       }
@@ -122,7 +123,7 @@ struct FusionGraphBuilder {
       }
     }
     return final_graph;
-  }
+  } // builder
   /**
    * @TODO Implement the function to prune the graph.
    *

@@ -50,9 +50,8 @@ struct HNSWBuilder {
   using DistanceSpaceTypeAlias = DistanceSpaceType;
 
   uint16_t dim_;  ///< The dimension of the vector data.
-  uint16_t
-      ef_construction_;  ///< The size of the dynamic candidate list for the construction phase.
-  uint32_t max_nbrs_underlay_;  ///< The maximum number of neighbors of the overlay graph.
+  uint16_t ef_construction_;  ///< The size of the dynamic candidate list for the construction phase.
+  uint32_t max_nbrs_underlay_;  ///< The maximum number of neighbors of the underlay graph.
   uint32_t max_nbrs_overlay_;   ///< The maximum number of neighbors of the overlay graph.
 
   std::shared_ptr<HNSWImpl<DistanceSpaceType, DataType, DistanceType, IDType>> hnsw_ =
@@ -142,12 +141,12 @@ struct HNSWBuilder {
     // this->init(this->node_num_, 2 * this->max_nbrs_);
     thread_pool.reset_task();
     // Copy the graph from hnsw to unified graph at level 0.
-    for (int i = 0; i < vec_num; ++i) {
+    for (int i = 0; i < vec_num; ++i) { // 把hnsw构建的连接copy到ids中去并保存在graph中
       // thread_pool.enqueue([i, this, &graph] {
       std::vector<IDType> ids(max_nbrs_underlay_, -1);
       auto internal_id = hnsw_->label_lookup_[i];
       auto edges = reinterpret_cast<uint32_t *>(hnsw_->get_linklist0(internal_id));
-      for (int j = 1; j <= edges[0]; ++j) {
+      for (int j = 1; j <= edges[0]; ++j) { // link_list第一个位置是size
         auto external_id = hnsw_->get_external_label(edges[j]);
         ids[j - 1] = external_id;
         // graph->at(i, j - 1) = external_id;
@@ -165,14 +164,14 @@ struct HNSWBuilder {
     thread_pool.reset_task();
 
     // Copy the overlay graph's data for unified graph.
-    for (int i = 0; i < vec_num; ++i) {
-      thread_pool.enqueue([this, i, &overlay_graph, &graph] {
+    for (int i = 0; i < vec_num; ++i) { //一个thread处理一个vec
+      thread_pool.enqueue([this, i, &overlay_graph, &graph] { //将hnsw生成的拓扑存储在Overlay graph中
         auto internal_id = hnsw_->label_lookup_[i];
         int level = hnsw_->element_levels_[internal_id];
         overlay_graph->levels_[i] = level;
 
         if (level > 0) {
-          if (overlay_graph->lists_[i].capacity() < level * graph->max_nbrs_) {
+          if (overlay_graph->lists_[i].capacity() < level * graph->max_nbrs_) { //不够空间就扩展一下
             overlay_graph->lists_[i].reserve(level * graph->max_nbrs_);
           }
           overlay_graph->lists_[i].clear();

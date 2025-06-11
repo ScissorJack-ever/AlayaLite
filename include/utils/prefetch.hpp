@@ -89,7 +89,7 @@ inline auto prefetch_l3(const void *address) -> void {
  * @param address A pointer to the starting memory address to prefetch.
  * @param line The number of 64-byte memory lines to prefetch.
  */
-inline auto mem_prefetch_l1(void *address, uint32_t line) -> void {
+inline auto mem_prefetch_l1(void *address, uint32_t line) -> void { // 64 bytes each line
   for (uint32_t i = 0; i < line; ++i) {
     prefetch_l1(static_cast<char *>(address) + i * 64);
   }

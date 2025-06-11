@@ -47,7 +47,7 @@ class Scheduler {
    * Operations is used after `co_await'. Then, the current coroutine is suspended, and the
    * scheduler will place its coroutine handle.
    */
-  class Operation {
+  class Operation { // 标准的 Awaitable 对象 ，用于支持 co_await scheduler.schedule() 这种语法
     friend class Scheduler;
     /**
      * @brief Constructs an Operation object for scheduling a task.
@@ -96,7 +96,7 @@ class Scheduler {
 
     std::coroutine_handle<> awaiting_coroutine_{
         nullptr};  ///< The coroutine that is awaiting to be resumed.
-  };
+  }; // class operation
 
   Scheduler() = delete;
   Scheduler(const Scheduler &) = delete;
@@ -120,7 +120,7 @@ class Scheduler {
    */
   ~Scheduler() {
     bool expected = false;
-    bool ret = shutdown_.compare_exchange_strong(expected, true, std::memory_order::release);
+    bool ret = shutdown_.compare_exchange_strong(expected, true, std::memory_order::release);// 保证前面读写不会重排到此操作后
     if (ret) {
       for (auto &worker : workers_) {
         worker->join();
@@ -137,7 +137,7 @@ class Scheduler {
    */
   void begin() {
     for (CpuID i = 0; i < cpus_.size(); i++) {
-      workers_.emplace_back(std::make_unique<Worker>(
+      workers_.emplace_back(std::make_unique<Worker>( // 一个cpu上分一个worker
           i, cpus_.at(i), task_queue_.get(), &this->total_task_count_, &this->total_finish_count_));
     }
     for (auto &worker : workers_) {
@@ -153,7 +153,7 @@ class Scheduler {
   void join() {
     bool expected = false;
     bool ret = shutdown_.compare_exchange_strong(expected, true, std::memory_order::release);
-    if (ret) {
+    if (ret) { //ret = shutdown_==expected, 即需要关闭
       for (auto &worker : workers_) {
         worker->join();
       }
@@ -193,7 +193,7 @@ class Scheduler {
    *
    * @param handle The coroutine handle representing the task to be resumed.
    */
-  void resume(std::coroutine_handle<> handle) {
+  void resume(std::coroutine_handle<> handle) { //不用加task_cnt,因为是之前被suspended的task
     assert(handle != nullptr);
     SpinLockGuard guard(enqueue_lock_);
     task_queue_->push(handle);
