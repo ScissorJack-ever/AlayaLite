@@ -1,8 +1,22 @@
+# Copyright 2025 AlayaDB.AI
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-from dataclasses import dataclass, field
+
 import numpy as np
-from alayalite import Client
-from alayalite import Index
+from alayalite import Client, Index
+
 from ..base.module import BaseANN
 
 
@@ -12,7 +26,7 @@ class AlayaLite(BaseANN):
         self.client = Client(self.index_save_dir)
         self.index = None
         self.ef = None
-        self.save_index_name = f"rabitq_index_rabitq_test"
+        self.save_index_name = "rabitq_index_rabitq_test"
 
         self.index_type = param["index_type"]
         self.metric = metric

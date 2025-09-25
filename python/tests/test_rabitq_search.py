@@ -12,16 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Tests for RaBitQ search functionality in AlayaLite."""
+
 import tempfile
 import unittest
 
-from alayalite.index import Index
 import numpy as np
 from alayalite import Client
+from alayalite.index import Index
 from alayalite.utils import calc_gt, calc_recall
 
 
 class TestAlayaLiteRaBitQSearch(unittest.TestCase):
+    """Test cases for RaBitQ search functionality."""
+
     def setUp(self):
         self.client = Client()
 
