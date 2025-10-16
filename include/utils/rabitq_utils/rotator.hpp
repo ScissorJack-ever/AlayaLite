@@ -124,6 +124,7 @@ class MatrixRotator : public Rotator<T> {
 };
 
 static inline void flip_sign(const uint8_t *flip, float *data, size_t dim) {
+#if defined(__AVX512F__)
   constexpr size_t kFloatsPerChunk = 64;  // Process 64 floats per iteration
   // constexpr size_t bits_per_chunk = floats_per_chunk;  // 64 bits = 8 bytes
 
@@ -160,6 +161,7 @@ static inline void flip_sign(const uint8_t *flip, float *data, size_t dim) {
     vec3 = _mm512_mask_xor_ps(vec3, mask3, vec3, sign_flip);
     _mm512_storeu_ps(&data[i + 48], vec3);
   }
+#endif
 }
 
 template <typename T>
@@ -244,6 +246,7 @@ class FhtKacRotator : public Rotator<float> {
   }
 
   static void kacs_walk(float *data, size_t len) {
+#if defined(__AVX512F__)
     // ! len % 32 == 0;
     for (size_t i = 0; i < len / 2; i += 16) {
       __m512 x = _mm512_loadu_ps(&data[i]);
@@ -255,6 +258,7 @@ class FhtKacRotator : public Rotator<float> {
       _mm512_storeu_ps(&data[i], new_x);
       _mm512_storeu_ps(&data[i + (len / 2)], new_y);
     }
+#endif
   }
 
   void rotate(const float *data, float *rotated_vec) const override {

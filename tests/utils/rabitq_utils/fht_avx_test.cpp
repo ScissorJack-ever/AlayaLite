@@ -60,6 +60,7 @@ struct HadamardCase {
 
 class HadamardTest : public ::testing::TestWithParam<HadamardCase> {};
 
+#if defined(__AVX512F__)
 TEST_P(HadamardTest, Correctness) {
   auto param = GetParam();
   size_t N = param.size();  // NOLINT
@@ -87,3 +88,4 @@ INSTANTIATE_TEST_SUITE_P(HadamardFunctions, HadamardTest,
                                            HadamardCase{9, alaya::helper_float_9},
                                            HadamardCase{10, alaya::helper_float_10},
                                            HadamardCase{11, alaya::helper_float_11}));
+#endif
