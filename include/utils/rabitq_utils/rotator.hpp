@@ -129,7 +129,6 @@ static inline void flip_sign(const uint8_t *flip, float *data, size_t dim) {
 
   static_assert(kFloatsPerChunk % 16 == 0,
                 "floats_per_chunk must be divisible by AVX512 register width");
-
   for (size_t i = 0; i < dim; i += kFloatsPerChunk) {
     // Load 64 bits (8 bytes) from the bit sequence
     uint64_t mask_bits;

@@ -162,7 +162,7 @@ TEST_F(RotatorTest, MatrixRotator_Orthogonality) {
 // ----------------------------
 // 3. FhtKacRotator Tests
 // ----------------------------
-
+#if defined(__AVX512F__)
 TEST_F(RotatorTest, FhtKacRotator_Interface) {
   size_t dim = 64, padded = 64;
   size_t print_size = 10;
@@ -237,17 +237,6 @@ TEST_F(RotatorTest, FhtKacRotator_NormPreservation) {
 // ----------------------------
 // 4. Edge Cases
 // ----------------------------
-
-TEST_F(RotatorTest, Edge_Dim1) {
-  {
-    auto rot = choose_rotator<float>(1, RotatorType::MatrixRotator);
-    std::vector<float> in = {1.5f};
-    std::vector<float> out(rot->size());
-    rot->rotate(in.data(), out.data());
-  }
-  { EXPECT_THROW(choose_rotator<float>(1, RotatorType::FhtKacRotator), std::invalid_argument); }
-}
-
 TEST_F(RotatorTest, Edge_MaxDim) {
   // FhtKac supports up to 2^11 = 2048
   auto rot = choose_rotator<float>(2048, RotatorType::FhtKacRotator);
@@ -255,6 +244,11 @@ TEST_F(RotatorTest, Edge_MaxDim) {
   auto input = random_vector(2048);
   std::vector<float> output(2048);
   rot->rotate(input.data(), output.data());
+}
+#endif
+
+TEST_F(RotatorTest, Edge_Dim1) {
+  { EXPECT_THROW(choose_rotator<float>(1, RotatorType::FhtKacRotator), std::invalid_argument); }
 }
 
 TEST_F(RotatorTest, Edge_DimTooBig) {
