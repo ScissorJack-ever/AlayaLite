@@ -41,10 +41,13 @@ template <typename DataType = float, typename DistanceType = float, typename IDT
 class RaBitQSpace {
  private:
   MetricType metric_{MetricType::L2};  ///< Metric type
-  uint32_t dim_{0};                    ///< Dimensionality of the data points
+  uint32_t full_dim_{0};               ///< Dimensionality of the data points
+  uint32_t principal_dim_{0};          ///< Principal dimension of the data points
   IDType item_cnt_{0};                 ///< Number of data points (nodes)
   IDType capacity_{0};                 ///< The maximum number of data points (nodes)
   RotatorType type_;                   ///< Rotator type
+  bool use_pca_;                       ///< Use pca or not
+  constexpr static const float pca_factor = 1.0F / 2;  // NOLINT
 
   size_t quant_codes_offset_{0};
   size_t f_add_offset_{0};
@@ -54,9 +57,9 @@ class RaBitQSpace {
 
   DistFuncRaBitQ<DataType, DistanceType> distance_cal_func_;  ///< Distance calculation function
 
-  StaticStorage<> storage_;                            ///< Data Storage
+  StaticStorage<> storage_;                               ///< Data Storage
   std::unique_ptr<RaBitQQuantizer<DataType>> quantizer_;  ///< Data Quantizer
-  std::unique_ptr<Rotator<DataType>> rotator_;         ///< Data rotator
+  std::unique_ptr<Rotator<DataType>> rotator_;            ///< Data rotator
 
   IDType ep_;  ///< search entry point
 
@@ -68,7 +71,7 @@ class RaBitQSpace {
     // https://github.com/VectorDB-NTU/RaBitQ-Library/blob/main/docs/docs/rabitq/estimator.md
     // for detailed information
     // 4. Its neighbors' IDs
-    size_t rvec_len = dim_ * sizeof(DataType);
+    size_t rvec_len = full_dim_ * sizeof(DataType);
     size_t nei_quant_code_len = get_padded_dim() * kDegreeBound / 8;  // 1 b/dim code
     size_t f_add_len = kDegreeBound * sizeof(DataType);
     size_t f_rescale_len = kDegreeBound * sizeof(DataType);
@@ -113,11 +116,17 @@ class RaBitQSpace {
 
   auto get_ep() const -> IDType { return ep_; }
 
-  RaBitQSpace(IDType capacity, size_t dim, MetricType metric,
-           RotatorType type = RotatorType::FhtKacRotator)
-      : capacity_(capacity), dim_(dim), metric_(metric), type_(type) {
-    rotator_ = choose_rotator<DataType>(dim_, type_, round_up_to_multiple_of<size_t>(dim_, 64));
-    quantizer_ = std::make_unique<RaBitQQuantizer<DataType>>(dim_, rotator_->size());
+  RaBitQSpace(IDType capacity, size_t dim, MetricType metric, bool use_pca = false,
+              RotatorType type = RotatorType::FhtKacRotator)
+      : capacity_(capacity), full_dim_(dim), metric_(metric), use_pca_(use_pca), type_(type) {
+    if (use_pca_) {
+      LOG_INFO("using pca in rabitq space");
+    }
+
+    principal_dim_ = (use_pca_ ? pca_factor : 1) * full_dim_;
+    rotator_ = choose_rotator<DataType>(principal_dim_, type_,
+                                        round_up_to_multiple_of<size_t>(principal_dim_, 64));
+    quantizer_ = std::make_unique<RaBitQQuantizer<DataType>>(principal_dim_, rotator_->size());
     initialize_offsets();
   }
 
@@ -176,14 +185,14 @@ class RaBitQSpace {
 
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < item_cnt; i++) {
-      const auto *src = data + (dim_ * i);
+      const auto *src = data + (full_dim_ * i);
       auto *dst = get_data_by_id(i);
-      std::copy(src, src + dim_, dst);
+      std::copy(src, src + full_dim_, dst);
     }
   }
 
   auto get_distance(IDType i, IDType j) -> DistanceType {
-    return distance_cal_func_(get_data_by_id(i), get_data_by_id(j), dim_);
+    return distance_cal_func_(get_data_by_id(i), get_data_by_id(j), principal_dim_);
   }
 
   // get raw data vector
@@ -258,9 +267,13 @@ class RaBitQSpace {
 
   auto get_capacity() const -> size_t { return capacity_; }
 
-  auto get_dim() const -> uint32_t { return dim_; }
+  auto get_full_dim() const -> uint32_t { return full_dim_; }
 
-  auto get_dist_func() const -> DistFuncRaBitQ<DataType, DistanceType> { return distance_cal_func_; }
+  auto get_dim() const -> uint32_t { return principal_dim_; }
+
+  auto get_dist_func() const -> DistFuncRaBitQ<DataType, DistanceType> {
+    return distance_cal_func_;
+  }
 
   auto get_data_num() const -> IDType { return item_cnt_; }
 
@@ -272,6 +285,8 @@ class RaBitQSpace {
   auto get_query_computer(const IDType id) const {
     return QueryComputer(*this, get_data_by_id(id));
   }
+
+  auto use_pca_or_not() const { return use_pca_; }
 
   struct QueryComputer {
    private:
@@ -295,14 +310,11 @@ class RaBitQSpace {
       DataType *__restrict__ est_ptr = est_dists_.data();
 
       // look up, get sum(nth_segment)
-      fastscan::accumulate(qc_ptr, lookup_table_.lut(),
-                           accu_res_.data(), padded_dim);
+      fastscan::accumulate(qc_ptr, lookup_table_.lut(), accu_res_.data(), padded_dim);
 
       ConstRowMajorArrayMap<u_int16_t> n_th_segment_arr(accu_res_.data(), 1, fastscan::kBatchSize);
-      ConstRowMajorArrayMap<DataType> f_add_arr(f_add_ptr, 1,
-                                                fastscan::kBatchSize);
-      ConstRowMajorArrayMap<DataType> f_rescale_arr(f_rescale_ptr, 1,
-                                                    fastscan::kBatchSize);
+      ConstRowMajorArrayMap<DataType> f_add_arr(f_add_ptr, 1, fastscan::kBatchSize);
+      ConstRowMajorArrayMap<DataType> f_rescale_arr(f_rescale_ptr, 1, fastscan::kBatchSize);
 
       RowMajorArrayMap<DistDataType> est_dist_arr(est_ptr, 1, fastscan::kBatchSize);
       est_dist_arr =
@@ -369,8 +381,9 @@ class RaBitQSpace {
       throw std::runtime_error("Cannot open file " + std::string(filename));
     }
 
+    writer.write(reinterpret_cast<char *>(&use_pca_), sizeof(use_pca_));
     writer.write(reinterpret_cast<char *>(&metric_), sizeof(metric_));
-    writer.write(reinterpret_cast<char *>(&dim_), sizeof(dim_));
+    writer.write(reinterpret_cast<char *>(&full_dim_), sizeof(full_dim_));
     writer.write(reinterpret_cast<char *>(&item_cnt_), sizeof(item_cnt_));
     writer.write(reinterpret_cast<char *>(&capacity_), sizeof(capacity_));
     writer.write(reinterpret_cast<char *>(&type_), sizeof(type_));
@@ -393,14 +406,17 @@ class RaBitQSpace {
       throw std::runtime_error("Cannot open file " + std::string(filename));
     }
 
+    reader.read(reinterpret_cast<char *>(&use_pca_), sizeof(use_pca_));
     reader.read(reinterpret_cast<char *>(&metric_), sizeof(metric_));
-    reader.read(reinterpret_cast<char *>(&dim_), sizeof(dim_));
+    reader.read(reinterpret_cast<char *>(&full_dim_), sizeof(full_dim_));
     reader.read(reinterpret_cast<char *>(&item_cnt_), sizeof(item_cnt_));
     reader.read(reinterpret_cast<char *>(&capacity_), sizeof(capacity_));
     reader.read(reinterpret_cast<char *>(&type_), sizeof(type_));
     reader.read(reinterpret_cast<char *>(&ep_), sizeof(ep_));
 
-    rotator_ = choose_rotator<DataType>(dim_, type_, round_up_to_multiple_of<size_t>(dim_, 64));
+    principal_dim_ = (use_pca_ ? pca_factor : 1) * full_dim_;
+    rotator_ = choose_rotator<DataType>(principal_dim_, type_,
+                                        round_up_to_multiple_of<size_t>(principal_dim_, 64));
     rotator_->load(reader);
 
     this->initialize_offsets();

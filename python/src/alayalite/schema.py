@@ -54,18 +54,22 @@ class IndexParams:
     metric: str = None
     capacity: np.uint32 = None
     max_nbrs: int = None
+    pca: bool = None
 
-    def index_path(self, folder_uri):
-        return os.path.join(folder_uri, f"{self.index_type}_{self.metric}_{self.max_nbrs}.index")
+    def index_path(self, folder_url):
+        return os.path.join(folder_url, f"{self.index_type}_{self.metric}_{self.max_nbrs}.index")
 
-    def data_path(self, folder_uri):
-        return os.path.join(folder_uri, "raw.data")
+    def data_path(self, folder_url):
+        return os.path.join(folder_url, "raw.data")
 
-    def quant_path(self, folder_uri):
+    def quant_path(self, folder_url):
         if self.quantization_type == "none":
             return ""
         else:
-            return os.path.join(folder_uri, f"{self.quantization_type}.data")
+            return os.path.join(folder_url, f"{self.quantization_type}.data")
+
+    def pca_model_path(self, folder_url):
+        return os.path.join(folder_url, "pca.pkl")
 
     def fill_none_values(self):
         if self.index_type is None:
@@ -82,6 +86,8 @@ class IndexParams:
             self.capacity = 100000
         if self.max_nbrs is None:
             self.max_nbrs = 32
+        if self.pca is None:
+            self.pca = False
 
     def to_cpp_params(self):
         native_index_type = valid_index_type(self.index_type)
@@ -90,6 +96,8 @@ class IndexParams:
         native_metric_type = valid_metric_type(self.metric)
         native_quantization_type = valid_quantization_type(self.quantization_type)
         capacity = valid_capacity_type(self.capacity)
+        max_nbrs = self.max_nbrs
+        pca = self.pca
 
         return _IndexParams(
             index_type_=native_index_type,
@@ -98,6 +106,8 @@ class IndexParams:
             quantization_type_=native_quantization_type,
             metric_=native_metric_type,
             capacity_=capacity,
+            max_nbrs_=max_nbrs,
+            pca_=pca,
         )
 
     def to_json_dict(self) -> str:
@@ -109,6 +119,7 @@ class IndexParams:
             "metric": self.metric,
             "capacity": self.capacity,
             "max_nbrs": self.max_nbrs,
+            "pca": self.pca,
         }
 
     @classmethod
@@ -122,6 +133,7 @@ class IndexParams:
             metric=data["metric"],
             capacity=data["capacity"],
             max_nbrs=data["max_nbrs"],
+            pca=data["pca"],
         )
 
     @classmethod
@@ -133,6 +145,7 @@ class IndexParams:
         metric = None
         capacity = None
         max_nbrs = None
+        pca = False
 
         if kwargs.get("index_type") is not None:
             ind_type = kwargs.get("index_type")
@@ -154,6 +167,8 @@ class IndexParams:
             capacity = valid_capacity_type(kwargs.get("capacity"))
         if kwargs.get("max_nbrs") is not None:
             max_nbrs = valid_max_nbrs(kwargs.get("max_nbrs"))
+        if kwargs.get("pca") is not None:
+            pca = kwargs.get("pca")
         return cls(
             index_type=index_type,
             data_type=data_type,
@@ -162,6 +177,7 @@ class IndexParams:
             metric=metric,
             capacity=capacity,
             max_nbrs=max_nbrs,
+            pca=pca,
         )
 
 

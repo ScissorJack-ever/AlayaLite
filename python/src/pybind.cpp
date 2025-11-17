@@ -62,24 +62,29 @@ PYBIND11_MODULE(_alayalitepy, m) {
       .value("NONE", alaya::QuantizationType::NONE)
       .value("SQ8", alaya::QuantizationType::SQ8)
       .value("SQ4", alaya::QuantizationType::SQ4)
+      .value("RABITQ", alaya::QuantizationType::RABITQ)
       .export_values();
 
   py::class_<alaya::IndexParams>(m, "IndexParams")
       .def(py::init<>())
       .def(py::init<alaya::IndexType, py::dtype, py::dtype, alaya::QuantizationType,
-                    alaya::MetricType, uint32_t>(),
+                    alaya::MetricType, uint32_t,uint32_t,bool>(),
            py::arg("index_type_") = alaya::IndexType::HNSW,
            py::arg("data_type_") = py::dtype::of<float>(),
            py::arg("id_type_") = py::dtype::of<uint32_t>(),
            py::arg("quantization_type_") = alaya::QuantizationType::NONE,
            py::arg("metric_") = alaya::MetricType::L2,
-           py::arg("capacity_") = py::dtype::of<uint32_t>())
+           py::arg("capacity_") = py::dtype::of<uint32_t>(),
+           py::arg("max_nbrs_") = py::dtype::of<uint32_t>(),
+           py::arg("pca_") = py::dtype::of<bool>())
       .def_readwrite("index_type_", &alaya::IndexParams::index_type_)
       .def_readwrite("data_type_", &alaya::IndexParams::data_type_)
       .def_readwrite("id_type_", &alaya::IndexParams::id_type_)
       .def_readwrite("quantization_type_", &alaya::IndexParams::quantization_type_)
       .def_readwrite("metric_", &alaya::IndexParams::metric_)
-      .def_readwrite("capacity_", &alaya::IndexParams::capacity_);
+      .def_readwrite("capacity_", &alaya::IndexParams::capacity_)
+      .def_readwrite("max_nbrs_", &alaya::IndexParams::max_nbrs_)
+      .def_readwrite("pca_", &alaya::IndexParams::pca_);
   ;
 
   alaya::IndexParams default_param;

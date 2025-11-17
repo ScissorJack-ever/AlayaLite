@@ -19,7 +19,9 @@ and querying a single vector index.
 
 import os
 
+import joblib
 import numpy as np
+from sklearn.decomposition import PCA
 
 from ._alayalitepy import PyIndexInterface as _PyIndexInterface
 from .common import (
@@ -101,7 +103,13 @@ class Index:
             f"  vectors.shape: {vectors.shape}, num_threads: {num_threads}, ef_construction: {ef_construction}\n"
             f"start fitting index..."
         )
-        self.__index.fit(vectors, ef_construction, num_threads)
+        if self.__params.pca is True:
+            self.__pca = PCA(n_components=self.__dim)
+            trans_vectors = self.__pca.fit_transform(vectors)
+            trans_vectors = np.ascontiguousarray(trans_vectors)
+            self.__index.fit(trans_vectors, ef_construction, num_threads)
+        else:
+            self.__index.fit(vectors, ef_construction, num_threads)
 
     def insert(self, vectors: VectorLike, ef: int = 100):
         """
@@ -140,7 +148,12 @@ class Index:
             f"query dimension must match the dimension of the vectors used to fit the index."
             f"fit data dimension: {self.__dim}, query dimension: {query.shape[0]}",
         )
-        return self.__index.search(query, topk, ef_search)
+        if self.__params.pca is True:
+            query = query.reshape(1, -1)
+            trans_query = self.__pca.transform(query)
+            return self.__index.search(trans_query, topk, ef_search)
+        else:
+            return self.__index.search(query, topk, ef_search)
 
     def batch_search(
         self,
@@ -159,7 +172,11 @@ class Index:
             f"query dimension must match the dimension of the vectors used to fit the index."
             f"fit data dimension: {self.__dim}, query dimension: {queries.shape[1]}",
         )
-        return self.__index.batch_search(queries, topk, ef_search, num_threads)
+        if self.__params.pca is True:
+            trans_query = self.__pca.transform(queries)
+            return self.__index.batch_search(trans_query, topk, ef_search, num_threads)
+        else:
+            return self.__index.batch_search(queries, topk, ef_search, num_threads)
 
     def batch_search_with_distance(
         self,
@@ -192,6 +209,12 @@ class Index:
         """
         return self.__params.data_type
 
+    def use_pca_or_not(self):
+        """
+        Get the flag that indicates whether index is using pca
+        """
+        return self.__params.pca
+
     def save(self, url) -> dict:
         """
         Save the index to a specified directory.
@@ -202,6 +225,10 @@ class Index:
         index_path = self.__params.index_path(url)
         data_path = self.__params.data_path(url)
         quant_path = self.__params.quant_path(url)
+
+        if self.__params.pca is True:
+            pca_model_path = self.__params.pca_model_path(url)
+            joblib.dump(self.__pca, pca_model_path)
 
         self.__index.save(index_path, data_path, quant_path)
         return {"type": "index", "index": self.__params.to_json_dict()}
@@ -224,6 +251,11 @@ class Index:
         index_path = params.index_path(index_url)
         data_path = params.data_path(index_url)
         quant_path = params.quant_path(index_url)
+
+        if params.pca is True:
+            pca_model_path = params.pca_model_path(index_url)
+            instance.__pca = joblib.load(pca_model_path)
+            print("Successfully load pca model.")
 
         instance.__index.load(index_path, data_path, quant_path)
         instance.__is_initialized = True
