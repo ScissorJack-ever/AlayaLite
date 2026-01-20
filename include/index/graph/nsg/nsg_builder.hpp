@@ -600,18 +600,23 @@ struct NSGBuilder {
     bool found = false;
     for (size_t i = 0; i < pool.size(); i++) {
       node = pool[i].id_;
-      if (degrees[node] < max_nbrs_ && node != id) {
+      if (!vis[node] &&
+          degrees[node] < max_nbrs_) {  // we can guarantee that node!=id since vis[id]==true
         found = true;
         break;
       }
     }
+
     if (!found) {
-      do {
-        node = rng_.rand_int(vector_num_);
-        if (!vis[node] && degrees[node] < max_nbrs_ && node != id) {
-          found = true;
+      // Fallback: force connect the first unvisited node, even if its degree is full
+      for (IDType i = 0; i < vector_num_; i++) {
+        if (!vis[i]) {
+          // found=true;
+          node = i;
+          degrees[node] -= 1;  // replace its last neighbor
+          break;
         }
-      } while (!found);
+      }
     }
     uint32_t pos = degrees[node];
     final_graph_->at(node, pos) = id;
