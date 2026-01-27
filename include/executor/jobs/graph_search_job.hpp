@@ -95,6 +95,10 @@ struct GraphSearchJob {
       throw std::invalid_argument("Only support RaBitQSpace instance!");
     }
 
+    if (ef < k) {
+      throw std::invalid_argument("ef must be >= k");
+    }
+
     // init
     size_t degree_bound = RaBitQSpace<>::kDegreeBound;
     auto entry = space_->get_ep();
@@ -142,9 +146,10 @@ struct GraphSearchJob {
       res_pool.insert(cur_node, q_computer.get_exact_qr_c_dist());
     }
 
-    if (!res_pool.is_full()) {
+    if (!res_pool.is_full()) [[unlikely]] {
       rabitq_supplement_result(res_pool, vis, query);
     }
+
     // return result
     res_pool.copy_results_to(reinterpret_cast<uint32_t *>(ids));
 #else
@@ -159,6 +164,10 @@ struct GraphSearchJob {
 #if defined(__AVX512F__)
     if constexpr (!is_rabitq_space_v<DistanceSpaceType>) {
       throw std::invalid_argument("Only support RaBitQSpace instance!");
+    }
+
+    if (ef < k) {
+      throw std::invalid_argument("ef must be >= k");
     }
 
     // init
@@ -205,13 +214,13 @@ struct GraphSearchJob {
       res_pool.insert(cur_node, q_computer.get_exact_qr_c_dist());
     }
 
-    if (!res_pool.is_full()) {
-      LOG_DEBUG("Failed to return enough knn, res_pool current size: {}", res_pool.size());
+    if (!res_pool.is_full()) [[unlikely]] {
       rabitq_supplement_result(res_pool, vis, query);
-      LOG_DEBUG("Finished supplementing result, res_pool current size: {}", res_pool.size());
     }
+
     // return result
     res_pool.copy_results_to(reinterpret_cast<uint32_t *>(ids));
+
     co_return;
 #else
     throw std::runtime_error("Avx512 instruction is not supported!");
@@ -219,7 +228,7 @@ struct GraphSearchJob {
   }
 
 #if defined(__linux__)
-  auto search(DataType *query, uint32_t k, IDType *ids, uint32_t ef) -> coro::task<> {
+  auto search(DataType *query, IDType *ids, uint32_t ef) -> coro::task<> {
     auto query_computer = space_->get_query_computer(query);
     LinearPool<DistanceType, IDType> pool(space_->get_data_num(), ef);
     graph_->initialize_search(pool, query_computer);
@@ -252,14 +261,15 @@ struct GraphSearchJob {
       }
     }
 
-    for (uint32_t i = 0; i < k; i++) {
+    // we will generate topk in rerank() using exact distance later
+    for (uint32_t i = 0; i < ef; i++) {
       ids[i] = pool.id(i);
     }
+
     co_return;
   }
 
-  auto search(DataType *query, uint32_t k, IDType *ids, DistanceType *distances, uint32_t ef)
-      -> coro::task<> {
+  auto search(DataType *query, IDType *ids, DistanceType *distances, uint32_t ef) -> coro::task<> {
     auto query_computer = space_->get_query_computer(query);
     LinearPool<DistanceType, IDType> pool(space_->get_data_num(), ef);
     graph_->initialize_search(pool, query_computer);
@@ -292,15 +302,16 @@ struct GraphSearchJob {
       }
     }
 
-    for (uint32_t i = 0; i < k; i++) {
+    for (uint32_t i = 0; i < ef; i++) {
       ids[i] = pool.id(i);
       distances[i] = pool.dist(i);
     }
+
     co_return;
   }
 #endif
 
-  void search_solo(DataType *query, uint32_t k, IDType *ids, uint32_t ef) {
+  void search_solo(DataType *query, IDType *ids, uint32_t ef) {
     auto query_computer = space_->get_query_computer(query);
     LinearPool<DistanceType, IDType> pool(space_->get_data_num(), ef);
     graph_->initialize_search(pool, query_computer);
@@ -330,12 +341,12 @@ struct GraphSearchJob {
         pool.insert(v, cur_dist);
       }
     }
-    for (uint32_t i = 0; i < k; i++) {
+    for (uint32_t i = 0; i < ef; i++) {
       ids[i] = pool.id(i);
     }
   }
 
-  void search_solo(DataType *query, uint32_t k, IDType *ids, DistanceType *distances, uint32_t ef) {
+  void search_solo(DataType *query, IDType *ids, DistanceType *distances, uint32_t ef) {
     auto query_computer = space_->get_query_computer(query);
     LinearPool<DistanceType, IDType> pool(space_->get_data_num(), ef);
     graph_->initialize_search(pool, query_computer);
@@ -365,13 +376,13 @@ struct GraphSearchJob {
         pool.insert(v, cur_dist);
       }
     }
-    for (uint32_t i = 0; i < k; i++) {
+    for (uint32_t i = 0; i < ef; i++) {
       ids[i] = pool.id(i);
       distances[i] = pool.dist(i);
     }
   }
 
-  void search_solo_updated(DataType *query, uint32_t k, IDType *ids, uint32_t ef) {
+  void search_solo_updated(DataType *query, IDType *ids, uint32_t ef) {
     auto query_computer = space_->get_query_computer(query);
     LinearPool<DistanceType, IDType> pool(space_->get_data_num(), ef);
     graph_->initialize_search(pool, query_computer);
@@ -412,7 +423,7 @@ struct GraphSearchJob {
         pool.insert(v, cur_dist);
       }
     }
-    for (uint32_t i = 0; i < k; i++) {
+    for (uint32_t i = 0; i < ef; i++) {
       ids[i] = pool.id(i);
     }
   }
