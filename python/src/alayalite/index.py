@@ -73,7 +73,7 @@ class Index:
         """
         return self.__index.get_data_by_id(vector_id)
 
-    @notify(span_id="index_fit")
+    @notify(span_id="index_fit", module_name="AlayaLite")
     def fit(
         self,
         vectors: VectorLikeBatch,
@@ -120,7 +120,7 @@ class Index:
         )
         self.__index.fit(vectors, ef_construction, num_threads)
 
-    @notify(span_id="index_insert")
+    @notify(span_id="index_insert", module_name="AlayaLite")
     def insert(
         self,
         vectors: VectorLike,
@@ -166,7 +166,7 @@ class Index:
         _assert(self.__index is not None, "Index is not init yet")
         self.__index.remove(vector_id)
 
-    @notify(span_id="index_search")
+    @notify(span_id="index_search", module_name="AlayaLite")
     def search(
         self,
         query: VectorLike,
@@ -200,7 +200,7 @@ class Index:
 
         return self.__index.search(query, topk, ef_search)
 
-    @notify(span_id="index_batch_search")
+    @notify(span_id="index_batch_search", module_name="AlayaLite")
     def batch_search(
         self,
         queries: VectorLikeBatch,
@@ -235,7 +235,7 @@ class Index:
 
         return self.__index.batch_search(queries, topk, ef_search, num_threads)
 
-    @notify(span_id="index_batch_search_with_distance")
+    @notify(span_id="index_batch_search_with_distance", module_name="AlayaLite")
     def batch_search_with_distance(
         self,
         queries: VectorLikeBatch,
@@ -282,7 +282,7 @@ class Index:
         """
         return self.__params.data_type
 
-    @notify(span_id="index_save")
+    @notify(span_id="index_save", module_name="AlayaLite")
     def save(
         self,
         url,
@@ -315,7 +315,7 @@ class Index:
         return {"type": "index", "index": self.__params.to_json_dict()}
 
     @classmethod
-    @notify(span_id="index_load")
+    @notify(span_id="index_load", module_name="AlayaLite")
     def load(
         cls,
         url,

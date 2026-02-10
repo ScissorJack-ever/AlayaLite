@@ -50,7 +50,7 @@ class Collection:
         self.__outer_inner_map = {}
         self.__inner_outer_map = {}
 
-    @notify(span_id="collection_batch_query")
+    @notify(span_id="collection_batch_query", module_name="AlayaLite")
     def batch_query(
         self,
         vectors: List[List[float]],
@@ -125,7 +125,7 @@ class Collection:
 
         return filtered_df.to_dict(orient="list")
 
-    @notify(span_id="collection_insert")
+    @notify(span_id="collection_insert", module_name="AlayaLite")
     def insert(
         self,
         items: List[tuple],
@@ -183,7 +183,7 @@ class Collection:
             payload["vector_dim"] = int(self.__index_py.get_dim())
             payload["total_vectors"] = int(len(self.__dataframe))
 
-    @notify(span_id="collection_upsert")
+    @notify(span_id="collection_upsert", module_name="AlayaLite")
     def upsert(
         self,
         items: List[tuple],
@@ -242,7 +242,7 @@ class Collection:
             payload["vector_dim"] = int(self.__index_py.get_dim())
             payload["total_vectors"] = int(len(self.__dataframe))
 
-    @notify(span_id="collection_delete_by_id")
+    @notify(span_id="collection_delete_by_id", module_name="AlayaLite")
     def delete_by_id(
         self,
         ids: List[str],
@@ -303,7 +303,7 @@ class Collection:
         if ids_to_delete:
             self.delete_by_id(ids_to_delete)
 
-    @notify(span_id="collection_reindex")
+    @notify(span_id="collection_reindex", module_name="AlayaLite")
     def reindex(
         self,
         *,
@@ -357,7 +357,7 @@ class Collection:
         # Replace the old inner-to-outer map
         self.__inner_outer_map = new_inner_outer_map
 
-    @notify(span_id="collection_save")
+    @notify(span_id="collection_save", module_name="AlayaLite")
     def save(
         self,
         url,
@@ -397,7 +397,7 @@ class Collection:
         return schema_map
 
     @classmethod
-    @notify(span_id="collection_load")
+    @notify(span_id="collection_load", module_name="AlayaLite")
     def load(
         cls,
         url,

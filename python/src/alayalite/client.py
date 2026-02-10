@@ -112,7 +112,7 @@ class Client:
             print(f"Index {name} does not exist")
             return None
 
-    @notify(span_id="client_create_collection")
+    @notify(span_id="client_create_collection", module_name="AlayaLite")
     def create_collection(
         self,
         name: str = "default",
@@ -155,7 +155,7 @@ class Client:
         self.__collection_map[name] = collection
         return collection
 
-    @notify(span_id="client_create_index")
+    @notify(span_id="client_create_index", module_name="AlayaLite")
     def create_index(
         self,
         name: str = "default",
@@ -230,7 +230,7 @@ class Client:
             index = self.create_index(name, **kwargs)
         return index
 
-    @notify(span_id="client_delete_collection")
+    @notify(span_id="client_delete_collection", module_name="AlayaLite")
     def delete_collection(
         self,
         collection_name: str,
@@ -274,7 +274,7 @@ class Client:
                 shutil.rmtree(collection_url)
                 print(f"Collection '{collection_name}' is deleted from disk")
 
-    @notify(span_id="client_delete_index")
+    @notify(span_id="client_delete_index", module_name="AlayaLite")
     def delete_index(
         self,
         index_name: str,
@@ -337,7 +337,7 @@ class Client:
         self.__collection_map = {}
         self.__index_map = {}
 
-    @notify(span_id="client_save_index")
+    @notify(span_id="client_save_index", module_name="AlayaLite")
     def save_index(
         self,
         index_name: str,
@@ -381,7 +381,7 @@ class Client:
             json.dump(schema_map, f, indent=4)
         print(f"Index '{index_name}' is saved")
 
-    @notify(span_id="client_save_collection")
+    @notify(span_id="client_save_collection", module_name="AlayaLite")
     def save_collection(
         self,
         collection_name: str,
