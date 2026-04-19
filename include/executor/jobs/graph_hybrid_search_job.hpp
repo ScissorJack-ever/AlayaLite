@@ -499,7 +499,6 @@ struct GraphHybridSearchJob {
                                  IDType *ids,
                                  const MetadataFilter &filter,
                                  std::string *res) requires(DistanceSpaceType::has_scalar_data) {
-#if defined(__AVX512F__)
     if constexpr (!is_rabitq_space_v<DistanceSpaceType>) {
       throw std::invalid_argument("Only support RaBitQSpace instance!");
     }
@@ -549,14 +548,6 @@ struct GraphHybridSearchJob {
                 res_size,
                 search_info.topk_);
     }
-#else
-    (void)query;
-    (void)search_info;
-    (void)ids;
-    (void)filter;
-    (void)res;
-    throw std::runtime_error("Avx512 instruction is not supported!");
-#endif
   }
 
   void rabitq_hybrid_search_solo(const DataType *query,

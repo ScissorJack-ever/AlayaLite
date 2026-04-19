@@ -16,7 +16,6 @@
 
 #include "space/sq4_space.hpp"
 #include <gtest/gtest.h>
-#include <sys/types.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>

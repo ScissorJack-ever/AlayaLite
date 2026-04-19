@@ -326,7 +326,6 @@ struct HybridSearchResources {
   }
 };
 
-#if defined(__AVX512F__)
 using RaBitQSpaceWithScalar = RaBitQSpace<float, float, uint32_t, ScalarData>;
 
 struct RaBitQHybridResources {
@@ -385,7 +384,6 @@ struct RaBitQHybridResources {
     }
   }
 };
-#endif
 
 }  // namespace
 
@@ -869,10 +867,9 @@ TEST(GraphHybridSearchJobUnitTest, UnderfilledBitsetPrefilterFallsBackToBruteFor
 }
 
 // ============================================================================
-// RaBitQ Hybrid Search Tests (requires AVX512)
+// RaBitQ Hybrid Search Tests
 // ============================================================================
 
-#if defined(__AVX512F__)
 class RaBitQHybridSearchTest : public ::testing::Test {
  protected:
   using HybridJobType = GraphHybridSearchJob<RaBitQSpaceWithScalar>;
@@ -1136,7 +1133,5 @@ TEST_F(RaBitQHybridSearchTest, RaBitQHybridSearchAutoPlannerUsesIndexedExactForS
     EXPECT_GE(static_cast<int64_t>(ids[i]), threshold);
   }
 }
-
-#endif  // __AVX512F__
 
 }  // namespace alaya

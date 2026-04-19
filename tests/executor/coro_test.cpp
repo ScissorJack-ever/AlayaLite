@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#if defined(__linex__)
+#if defined(__linux__)
 #include <gtest/gtest.h>
 #include <atomic>
 #include <filesystem>

@@ -15,7 +15,6 @@
  */
 
 #pragma once
-#include <sys/types.h>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>

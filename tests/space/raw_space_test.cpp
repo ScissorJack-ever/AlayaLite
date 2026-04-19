@@ -16,7 +16,6 @@
 
 #include "space/raw_space.hpp"
 #include <gtest/gtest.h>
-#include <sys/types.h>
 #include <cmath>
 #include <filesystem>
 #include "utils/metric_type.hpp"

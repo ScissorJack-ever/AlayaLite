@@ -19,6 +19,7 @@ include(cmake/Codecov.cmake)
 option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 option(BUILD_PYTHON "Build Python extension module" ON)
 option(BUILD_TESTING "Build tests" OFF)
+option(ALAYA_ENABLE_NATIVE_OPT "Enable host-specific -march=native optimizations" OFF)
 
 # ============================================================================
 # 1. C++ STANDARD AND COMPILER CONFIGURATION
@@ -32,13 +33,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
   add_compile_options(/EHsc /utf-8 /O2)
 else()
-  add_compile_options(
-    -Wall
-    -Ofast
-    -march=native
-    -funroll-loops
-    -fopenmp
-  )
+  add_compile_options(-Wall -Ofast -funroll-loops)
+  if(ALAYA_ENABLE_NATIVE_OPT)
+    add_compile_options(-march=native)
+  endif()
 endif()
 
 # ============================================================================
@@ -54,19 +52,17 @@ endif()
 find_package(concurrentqueue REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(OpenMP REQUIRED)
+find_package(OpenMP QUIET)
 find_package(RocksDB REQUIRED)
 if(BUILD_PYTHON)
   find_package(pybind11 REQUIRED)
 endif()
 
-set(THIRD_PARTY_LIBS
-    spdlog::spdlog_header_only
-    concurrentqueue::concurrentqueue
-    Eigen3::Eigen
-    OpenMP::OpenMP_CXX
-    RocksDB::rocksdb
-)
+set(THIRD_PARTY_LIBS spdlog::spdlog_header_only concurrentqueue::concurrentqueue Eigen3::Eigen RocksDB::rocksdb)
+
+if(TARGET OpenMP::OpenMP_CXX)
+  list(APPEND THIRD_PARTY_LIBS OpenMP::OpenMP_CXX)
+endif()
 
 if(UNIX AND NOT APPLE)
   find_package(libcoro REQUIRED)

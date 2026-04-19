@@ -19,7 +19,6 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
-#include <sys/types.h>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -1126,6 +1125,9 @@ class PyIndex : public BasePyIndex {
 
     {
       py::gil_scoped_release release;
+      LOG_INFO_ONCE(
+          "search fallback: coroutine batch search is unavailable on this platform, using "
+          "synchronous search path");
       for (size_t i = 0; i < query_size; i++) {
         auto cur_query = query_ptr + i * query_dim;
         if constexpr (is_rabitq_space_v<SearchSpaceType>) {
@@ -1198,6 +1200,9 @@ class PyIndex : public BasePyIndex {
 
     {
       py::gil_scoped_release release;
+      LOG_INFO_ONCE(
+          "search fallback: coroutine distance batch search is unavailable on this platform, using "
+          "synchronous search path");
       for (size_t i = 0; i < query_size; i++) {
         auto cur_query = query_ptr + i * query_dim;
         search_job_->search_solo(cur_query, topk_ids[i].data(), topk_dists[i].data(), topk, ef);

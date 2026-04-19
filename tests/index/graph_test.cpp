@@ -15,8 +15,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <sys/types.h>
-
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
