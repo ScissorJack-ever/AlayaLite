@@ -60,19 +60,24 @@ ALAYA_ENABLE_NATIVE_OPT="OFF"
 build = "cp3{8,9,10,11,12,13}-*"
 build-frontend = "build[uv]"
 skip = ["*-musllinux*", "*-manylinux_i686", "cp38-win*"]
-before-build = "python {project}/scripts/conan_build/conan_install.py --project-dir {project}"
-container-engine = "docker; create_args: -v ~/.conan2:/root/.conan2"
+before-all = "python {project}/scripts/conan_build/conan_install.py --project-dir {project}"
+container-engine = "docker; create_args: -v ~/.conan2:/root/.conan2 -v ~/.cache/uv:/root/.cache/uv -v ~/.cache/pip:/root/.cache/pip"
 test-requires = ["pytest", "pytest-asyncio", "httpx", "fastapi"]
 test-command = "pytest {project} -v"
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
-before-all = "yum -y install perl-IPC-Cmd perl-Digest-SHA perl-Time-Piece"
+environment = { ALAYA_USE_STATIC_CONAN_PROFILE = "1", UV_CACHE_DIR = "/root/.cache/uv", PIP_CACHE_DIR = "/root/.cache/pip" }
+before-all = [
+    "yum -y install perl-IPC-Cmd perl-Digest-SHA perl-Time-Piece",
+    "python -m pip install --disable-pip-version-check uv",
+    "python {project}/scripts/conan_build/conan_install.py --project-dir {project}",
+]
 
 [tool.cibuildwheel.macos]
 before-all = "brew install libomp"
-environment = { MACOSX_DEPLOYMENT_TARGET = "14.0" }
+environment = { MACOSX_DEPLOYMENT_TARGET = "14.0", CC = "clang", CXX = "clang++" }
 repair-wheel-command = "delocate-listdeps {wheel} && delocate-wheel -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.windows]

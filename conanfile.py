@@ -35,12 +35,13 @@ class AlayaLiteConan(ConanFile):
             self.requires("liburing/2.13")
 
         # OpenMP support
-        if self.settings.os == "Linux":
-            if self.settings.compiler in ["clang", "apple-clang"]:
-                self.requires("libomp/18.1.8")
-        # GCC: assume libgomp is system-provided
-        elif self.settings.os == "Macos":
-            self.requires("libomp/18.1.8")
+        #
+        # Use the compiler/toolchain distribution instead of Conan here:
+        # - Linux GCC uses system-provided libgomp
+        # - macOS wheel builds install Homebrew `libomp` in cibuildwheel
+        # - Clang-based local builds can use the platform package manager
+        #
+        # CMake resolves OpenMP separately via `find_package(OpenMP QUIET)`.
 
     def configure(self):
         # Static link all dependencies
