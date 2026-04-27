@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "utils/metadata_filter_matcher.hpp"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <filesystem>
@@ -22,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "utils/metadata_filter_matcher.hpp"
 
 namespace alaya {
 namespace fs = std::filesystem;
@@ -334,8 +334,8 @@ TEST_F(MetadataFilterExecutorTest, IntegerRangeFiltersUseIndexFastPathAndHandleE
   MetadataFilterExecutor<TestID> gt_executor(gt_filter, storage.get(), 4);
   EXPECT_EQ(gt_executor.indexed_ids(), (std::vector<TestID>{2, 3}));
 
-  auto gt_max_filter = make_single_condition_filter(
-      "age", FilterOp::GT, std::numeric_limits<int64_t>::max());
+  auto gt_max_filter =
+      make_single_condition_filter("age", FilterOp::GT, std::numeric_limits<int64_t>::max());
   MetadataFilterExecutor<TestID> gt_max_executor(gt_max_filter, storage.get(), 4);
   EXPECT_TRUE(gt_max_executor.has_index_fast_path());
   EXPECT_TRUE(gt_max_executor.indexed_ids().empty());
@@ -349,8 +349,8 @@ TEST_F(MetadataFilterExecutorTest, IntegerRangeFiltersUseIndexFastPathAndHandleE
   MetadataFilterExecutor<TestID> lt_executor(lt_filter, storage.get(), 4);
   EXPECT_EQ(lt_executor.indexed_ids(), (std::vector<TestID>{0, 1}));
 
-  auto lt_min_filter = make_single_condition_filter(
-      "age", FilterOp::LT, std::numeric_limits<int64_t>::min());
+  auto lt_min_filter =
+      make_single_condition_filter("age", FilterOp::LT, std::numeric_limits<int64_t>::min());
   MetadataFilterExecutor<TestID> lt_min_executor(lt_min_filter, storage.get(), 4);
   EXPECT_TRUE(lt_min_executor.has_index_fast_path());
   EXPECT_TRUE(lt_min_executor.indexed_ids().empty());

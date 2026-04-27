@@ -34,6 +34,21 @@ def calc_gt_ip(data, query, topk):
     return gt
 
 
+def _normalize_vectors(vectors):
+    norms = np.linalg.norm(vectors, axis=-1, keepdims=True)
+    return (vectors / np.maximum(norms, np.finfo(np.float32).eps)).astype(np.float32)
+
+
+def make_ip_test_data(num_vectors=1000, dim=128, num_queries=None, seed=42):
+    rng = np.random.default_rng(seed)
+    vectors = _normalize_vectors(rng.standard_normal((num_vectors, dim), dtype=np.float32))
+    if num_queries is None:
+        query = _normalize_vectors(rng.standard_normal(dim, dtype=np.float32))
+        return vectors, query
+    queries = _normalize_vectors(rng.standard_normal((num_queries, dim), dtype=np.float32))
+    return vectors, queries
+
+
 class TestAlayaLiteRaBitQSearch(unittest.TestCase):
     """Test cases for RaBitQ implementation."""
 
@@ -97,8 +112,7 @@ class TestAlayaLiteRaBitQSearch(unittest.TestCase):
 
     def test_rabitq_search_solo_ip(self):
         index = self.client.create_index(name="rabitq_ip_index", metric="ip", quantization_type="rabitq")
-        vectors = np.random.rand(1000, 128).astype(np.float32)
-        single_query = np.random.rand(128).astype(np.float32)
+        vectors, single_query = make_ip_test_data(seed=42)
         index.fit(vectors)
         result = index.search(single_query, 10, 400).reshape(1, -1)
         gt = calc_gt_ip(vectors, single_query.reshape(1, -1), 10)
@@ -107,8 +121,7 @@ class TestAlayaLiteRaBitQSearch(unittest.TestCase):
 
     def test_rabitq_batch_search_ip(self):
         index = self.client.create_index(name="rabitq_ip_index", metric="ip", quantization_type="rabitq")
-        vectors = np.random.rand(1000, 128).astype(np.float32)
-        queries = np.random.rand(10, 128).astype(np.float32)
+        vectors, queries = make_ip_test_data(num_queries=10, seed=43)
         index.fit(vectors)
         result = index.batch_search(queries, 10, 400)
         gt = calc_gt_ip(vectors, queries, 10)
@@ -117,8 +130,7 @@ class TestAlayaLiteRaBitQSearch(unittest.TestCase):
 
     def test_rabitq_save_load_ip(self):
         index = self.client.create_index(name="rabitq_ip_index", metric="ip", quantization_type="rabitq")
-        vectors = np.random.rand(1000, 128).astype(np.float32)
-        queries = np.random.rand(10, 128).astype(np.float32)
+        vectors, queries = make_ip_test_data(num_queries=10, seed=44)
         index.fit(vectors)
         result = index.batch_search(queries, 10, 400)
         gt = calc_gt_ip(vectors, queries, 10)

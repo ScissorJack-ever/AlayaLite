@@ -1,30 +1,17 @@
-import importlib
-import sys
-from typing import Generator
+from typing import AsyncIterator
 
-import pytest
-from fastapi.testclient import TestClient
+import httpx
+import pytest_asyncio
 
-
-def _reload_app_module() -> TestClient:
-    # Remove loaded app.* modules so a fresh client is created with current env
-    for name in list(sys.modules.keys()):
-        if name == "app" or name.startswith("app."):
-            del sys.modules[name]
-    app_module = importlib.import_module("app.main")
-    return TestClient(app_module.app)
+from app.tests.client_helpers import create_app_client
 
 
-@pytest.fixture()
-def fresh_client(tmp_path, monkeypatch) -> Generator[TestClient, None, None]:
+@pytest_asyncio.fixture()
+async def fresh_client(tmp_path, monkeypatch) -> AsyncIterator[httpx.AsyncClient]:
     # Isolate storage into a temp directory for this test
     monkeypatch.setenv("ALAYALITE_DATA_DIR", str(tmp_path))
     # Set RocksDB directory to tmp_path for test isolation
     rocksdb_dir = str(tmp_path / "RocksDB")
     monkeypatch.setenv("ALAYALITE_ROCKSDB_DIR", rocksdb_dir)
-    client = _reload_app_module()
-    try:
+    async with create_app_client() as client:
         yield client
-    finally:
-        # tmp_path will be cleaned up by pytest automatically
-        pass

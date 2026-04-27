@@ -15,21 +15,59 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <limits>
+#include <string>
+#include <variant>
+#include <vector>
 
 #include "utils/dataset_utils.hpp"
+#include "utils/hybrid_dataset_utils.hpp"
+#include "utils/parser.hpp"
 
 namespace alaya {
 
 class DatasetTest : public ::testing::Test {
  protected:
-  void SetUp() override {
-    data_dir_ = std::filesystem::current_path().parent_path() / "data";
-  }
+  void SetUp() override { data_dir_ = resolve_data_dir(); }
 
   std::filesystem::path data_dir_;
 };
+
+namespace {
+
+void write_tiny_npy(const std::filesystem::path &filepath,
+                    const std::vector<float> &values,
+                    uint32_t rows,
+                    uint32_t cols,
+                    const std::string &descr = "<f4",
+                    bool fortran_order = false) {
+  std::ofstream writer(filepath, std::ios::binary);
+  const char magic[] = "\x93NUMPY";
+  writer.write(magic, 6);
+  const uint8_t major = 1;
+  const uint8_t minor = 0;
+  writer.write(reinterpret_cast<const char *>(&major), sizeof(major));
+  writer.write(reinterpret_cast<const char *>(&minor), sizeof(minor));
+
+  std::string header = "{'descr': '" + descr +
+                       "', 'fortran_order': " + std::string(fortran_order ? "True" : "False") +
+                       ", 'shape': (" + std::to_string(rows) + ", " + std::to_string(cols) + "), }";
+  while ((10 + header.size() + 1) % 16 != 0) {
+    header.push_back(' ');
+  }
+  header.push_back('\n');
+  auto header_len = static_cast<uint16_t>(header.size());
+  writer.write(reinterpret_cast<const char *>(&header_len), sizeof(header_len));
+  writer.write(header.data(), static_cast<std::streamsize>(header.size()));
+  writer.write(reinterpret_cast<const char *>(values.data()),
+               static_cast<std::streamsize>(values.size() * sizeof(float)));
+}
+
+}  // namespace
 
 TEST_F(DatasetTest, DISABLED_LoadSiftSmall) {
   auto config = sift_small(data_dir_);
@@ -77,6 +115,68 @@ TEST_F(DatasetTest, SiftMicroConfig) {
   EXPECT_TRUE(config.data_file_.string().find("siftsmall") != std::string::npos);
 }
 
+TEST_F(DatasetTest, QdrantHybridConfig) {
+  auto config = qdrant_random_ints_100k(data_dir_);
+
+  EXPECT_EQ(config.name_, "qdrant-random-ints-100k");
+  EXPECT_EQ(config.data_file_.filename(), "vectors.npy");
+  EXPECT_EQ(config.scalar_file_.filename(), "payloads.jsonl");
+  EXPECT_EQ(config.query_file_.filename(), "tests.jsonl");
+  EXPECT_EQ(config.metric_, MetricType::COS);
+  EXPECT_FALSE(config.download_url_.empty());
+}
+
+TEST_F(DatasetTest, LoadTinyQdrantHybridDataset) {
+  auto dir = std::filesystem::temp_directory_path() / "alayalite_tiny_qdrant_hybrid";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+
+  write_tiny_npy(dir / "vectors.npy", {1.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F}, 3, 2);
+
+  {
+    std::ofstream payloads(dir / "payloads.jsonl");
+    payloads << R"({"label":"target","price":10,"featured":true})" << '\n';
+    payloads << R"({"label":"other","price":5,"featured":false})" << '\n';
+    payloads << R"({"label":"target","price":20,"featured":true})" << '\n';
+  }
+
+  {
+    std::ofstream tests(dir / "tests.jsonl");
+    tests << R"({"vector":[1.0,0.0],"conditions":{"must":[)"
+          << R"({"key":"label","match":{"value":"target"}},)"
+          << R"({"key":"price","range":{"gte":10}})"
+          << R"(]},"closest_ids":[0,2]})" << '\n';
+  }
+
+  auto config = HybridDatasetConfig{
+      .name_ = "tiny-qdrant-hybrid",
+      .dir_ = dir,
+      .data_file_ = dir / "vectors.npy",
+      .scalar_file_ = dir / "payloads.jsonl",
+      .query_file_ = dir / "tests.jsonl",
+      .metric_ = MetricType::COS,
+  };
+
+  auto ds = load_hybrid_dataset(config);
+
+  EXPECT_EQ(ds.name_, "tiny-qdrant-hybrid");
+  EXPECT_EQ(ds.data_num_, 3);
+  EXPECT_EQ(ds.query_num_, 1);
+  EXPECT_EQ(ds.dim_, 2);
+  EXPECT_EQ(ds.gt_dim_, 2);
+  EXPECT_EQ(ds.data_.size(), 6);
+  EXPECT_EQ(ds.queries_.size(), 2);
+  EXPECT_EQ(ds.ground_truth_, (std::vector<uint32_t>{0, 2}));
+  ASSERT_EQ(ds.scalar_data_.size(), 3);
+  ASSERT_EQ(ds.query_filters_.size(), 1);
+  EXPECT_TRUE(ds.query_filters_[0].evaluate(ds.scalar_data_[0].metadata));
+  EXPECT_FALSE(ds.query_filters_[0].evaluate(ds.scalar_data_[1].metadata));
+  EXPECT_TRUE(ds.query_filters_[0].evaluate(ds.scalar_data_[2].metadata));
+  EXPECT_EQ(ds.indexed_fields_, (std::vector<std::string>{"label", "price"}));
+
+  std::filesystem::remove_all(dir);
+}
+
 TEST_F(DatasetTest, DISABLED_LoadSiftMicro) {
   auto config = sift_micro(data_dir_);
   auto ds = load_dataset(config);
@@ -109,9 +209,133 @@ TEST_F(DatasetTest, DISABLED_DataTruncation) {
   for (uint32_t i = 0; i < micro_ds.query_num_; ++i) {
     for (uint32_t j = 0; j < micro_ds.gt_dim_; ++j) {
       uint32_t gt_id = micro_ds.ground_truth_[i * micro_ds.gt_dim_ + j];
-      EXPECT_LT(gt_id, micro_ds.data_num_) << "GT ID " << gt_id << " exceeds data_num " << micro_ds.data_num_;
+      EXPECT_LT(gt_id, micro_ds.data_num_)
+          << "GT ID " << gt_id << " exceeds data_num " << micro_ds.data_num_;
     }
   }
+}
+
+TEST(ParserTest, ParseJsonLineHandlesScalarsArraysAndEscapes) {
+  auto root = parse_json_line(
+      R"({"name":"alpha\nbeta\u0041","count":-42,"score":12.5,"enabled":true,"items":[1,"two"],"none":null})");
+  auto *object = as_object(root);
+  ASSERT_NE(object, nullptr);
+
+  ASSERT_NE(find_any(*object, {"name"}), nullptr);
+  EXPECT_EQ(*as_string(*find_any(*object, {"name"})), "alpha\nbetaA");
+  EXPECT_EQ(std::get<int64_t>(find_any(*object, {"count"})->value_), -42);
+  EXPECT_DOUBLE_EQ(std::get<double>(find_any(*object, {"score"})->value_), 12.5);
+  EXPECT_TRUE(std::get<bool>(find_any(*object, {"enabled"})->value_));
+  EXPECT_TRUE(std::holds_alternative<std::nullptr_t>(find_any(*object, {"none"})->value_));
+
+  auto *items = as_array(*find_any(*object, {"items"}));
+  ASSERT_NE(items, nullptr);
+  ASSERT_EQ(items->size(), 2);
+  EXPECT_FLOAT_EQ(json_to_float((*items)[0]), 1.0F);
+  EXPECT_EQ(*as_string((*items)[1]), "two");
+}
+
+TEST(ParserTest, LoadNpyFloatMatrixHonorsMaxRowsAndRejectsUnsupportedHeaders) {
+  auto dir = std::filesystem::temp_directory_path() / "alayalite_parser_test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+
+  auto valid_file = dir / "valid.npy";
+  write_tiny_npy(valid_file, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F}, 3, 2);
+  auto matrix = load_npy_float_matrix(valid_file, 2);
+  EXPECT_EQ(matrix.rows_, 2);
+  EXPECT_EQ(matrix.cols_, 2);
+  EXPECT_EQ(matrix.data_, (std::vector<float>{1.0F, 2.0F, 3.0F, 4.0F}));
+
+  auto invalid_descr = dir / "invalid_descr.npy";
+  write_tiny_npy(invalid_descr, {1.0F, 2.0F}, 1, 2, "<f8", false);
+  EXPECT_THROW(load_npy_float_matrix(invalid_descr), std::runtime_error);
+
+  auto fortran_file = dir / "fortran.npy";
+  write_tiny_npy(fortran_file, {1.0F, 2.0F}, 1, 2, "<f4", true);
+  EXPECT_THROW(load_npy_float_matrix(fortran_file), std::runtime_error);
+
+  auto invalid_json = []() {
+    (void)parse_json_line(R"({"broken":[1,})");
+  };
+  EXPECT_THROW(invalid_json(), std::runtime_error);
+  EXPECT_THROW(json_to_u32(JsonValue{int64_t{-1}}), std::runtime_error);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_F(DatasetTest, LoadTinyQdrantHybridDatasetSupportsAliasesAndTruncation) {
+  auto dir = std::filesystem::temp_directory_path() / "alayalite_tiny_qdrant_hybrid_aliases";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+
+  write_tiny_npy(dir / "vectors.npy",
+                 {
+                     1.0F,
+                     0.0F,
+                     0.0F,
+                     1.0F,
+                     0.6F,
+                     0.8F,
+                     -1.0F,
+                     0.0F,
+                 },
+                 4,
+                 2);
+
+  {
+    std::ofstream payloads(dir / "payloads.jsonl");
+    payloads << '\n';
+    payloads << R"({"tag":"keep","score":5,"group":"red","active":true})" << '\n';
+    payloads << R"({"tag":"drop","score":6,"group":"blue","active":false})" << '\n';
+    payloads << R"({"tag":"keep","score":8,"group":"blue","active":true})" << '\n';
+    payloads << R"({"tag":"keep","score":9,"group":"green","active":true})" << '\n';
+  }
+
+  {
+    std::ofstream tests(dir / "tests.jsonl");
+    tests
+        << R"({"query":[1.0,0.0],"filter":{"and":[{"tag":{"$eq":"keep"}},{"score":{"range":{"$gte":5,"$lt":9}}}]},"neighbors":[99,98]})"
+        << '\n';
+    tests
+        << R"({"query_vector":[0.0,1.0],"payload_filter":{"should":[{"group":{"$in":["blue"]}},{"active":{"$eq":false}}],"must_not":[{"tag":{"$eq":"drop"}}]},"nearest_ids":[7,6]})"
+        << '\n';
+  }
+
+  auto config = HybridDatasetConfig{
+      .name_ = "tiny-qdrant-hybrid-aliases",
+      .dir_ = dir,
+      .data_file_ = dir / "vectors.npy",
+      .scalar_file_ = dir / "payloads.jsonl",
+      .query_file_ = dir / "tests.jsonl",
+      .max_data_num_ = 3,
+      .metric_ = MetricType::COS,
+  };
+
+  auto ds = load_hybrid_dataset(config);
+
+  EXPECT_EQ(ds.data_num_, 3);
+  EXPECT_EQ(ds.query_num_, 2);
+  EXPECT_EQ(ds.dim_, 2);
+  EXPECT_EQ(ds.gt_dim_, 2);
+  EXPECT_EQ(ds.ground_truth_.size(), 4);
+  EXPECT_EQ(ds.ground_truth_[0], 0U);
+  EXPECT_EQ(ds.ground_truth_[1], 2U);
+  EXPECT_EQ(ds.ground_truth_[2], 2U);
+  EXPECT_EQ(ds.ground_truth_[3], std::numeric_limits<uint32_t>::max());
+
+  ASSERT_EQ(ds.query_filters_.size(), 2);
+  EXPECT_TRUE(ds.query_filters_[0].evaluate(ds.scalar_data_[0].metadata));
+  EXPECT_FALSE(ds.query_filters_[0].evaluate(ds.scalar_data_[1].metadata));
+  EXPECT_TRUE(ds.query_filters_[0].evaluate(ds.scalar_data_[2].metadata));
+
+  EXPECT_FALSE(ds.query_filters_[1].evaluate(ds.scalar_data_[0].metadata));
+  EXPECT_FALSE(ds.query_filters_[1].evaluate(ds.scalar_data_[1].metadata));
+  EXPECT_TRUE(ds.query_filters_[1].evaluate(ds.scalar_data_[2].metadata));
+
+  EXPECT_EQ(ds.indexed_fields_, (std::vector<std::string>{"active", "group", "score", "tag"}));
+
+  std::filesystem::remove_all(dir);
 }
 
 }  // namespace alaya
