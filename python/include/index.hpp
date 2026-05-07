@@ -169,7 +169,7 @@ class PyIndex : public BasePyIndex {
                                                                params_.rocksdb_path_));
 
     uint64_t max_seen_op_id = 0;
-    recovery_manager_->replayable_records(0, &max_seen_op_id);
+    (void)recovery_manager_->replayable_records(0, &max_seen_op_id);
     auto manifest = recovery_manager_->current_snapshot();
     if (manifest.has_value()) {
       last_committed_recovery_op_id_ = manifest->applied_through_op_id;
@@ -344,6 +344,23 @@ class PyIndex : public BasePyIndex {
     auto inserted_id = update_job_->insert_and_update(data, ef, scalar_data);
     materialized_view_manager_.invalidate("insert");
     return inserted_id;
+  }
+
+  void validate_insert_item_id_available(const ScalarData &scalar_data) const {
+    if constexpr (SearchSpaceType::has_scalar_data) {
+      if (scalar_data.item_id.empty() || search_space_ == nullptr) {
+        return;
+      }
+      auto *storage = search_space_->get_scalar_storage();
+      if (storage == nullptr) {
+        throw std::runtime_error("Scalar storage is not initialized");
+      }
+      if (!storage->item_id_available(scalar_data.item_id)) {
+        throw std::runtime_error("Duplicate item_id: " + scalar_data.item_id);
+      }
+    } else {
+      (void)scalar_data;
+    }
   }
 
   auto remove_nondurable(IDType id) -> void {
@@ -696,6 +713,7 @@ class PyIndex : public BasePyIndex {
     auto insert_data_ptr = static_cast<DataType *>(insert_data.request().ptr);
     MetadataMap meta_map = pydict_to_metadata_map(metadata);
     ScalarData scalar_data{item_id, document, meta_map};
+    validate_insert_item_id_available(scalar_data);
 
     // TODO(P2): RocksDB has its own internal WAL and the custom WAL must stay
     // in sync. If the process crashes between insert_nondurable (RocksDB write)
