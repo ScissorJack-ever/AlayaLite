@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <memory>
 #include <string_view>
+#include <vector>
 #include "utils/log.hpp"
 #include "utils/metadata_filter.hpp"
 #include "utils/scalar_data.hpp"
@@ -97,8 +98,8 @@ TEST_F(SQ8SpaceTest, SaveAndLoad) {
 TEST_F(SQ8SpaceTest, QueryComputerWithQuery) {
   float data[8] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
   space_->fit(reinterpret_cast<float *>(data), 2);
-  float query[4] = {1.0, 2.0, 3.0, 4.0};
-  auto query_computer = space_->get_query_computer(query);
+  std::vector<float> query{1.0, 2.0, 3.0, 4.0};
+  auto query_computer = space_->get_query_computer(query.data());
   EXPECT_GE(query_computer(1), 64);
 }
 

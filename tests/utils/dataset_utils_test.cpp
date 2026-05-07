@@ -39,16 +39,29 @@ class DatasetTest : public ::testing::Test {
 
 namespace {
 
+void write_little_endian_u16(std::ofstream &writer, uint16_t value) {
+  const char bytes[] = {static_cast<char>(value & 0xFF), static_cast<char>((value >> 8) & 0xFF)};
+  writer.write(bytes, sizeof(bytes));
+}
+
+void write_little_endian_u32(std::ofstream &writer, uint32_t value) {
+  const char bytes[] = {static_cast<char>(value & 0xFF),
+                        static_cast<char>((value >> 8) & 0xFF),
+                        static_cast<char>((value >> 16) & 0xFF),
+                        static_cast<char>((value >> 24) & 0xFF)};
+  writer.write(bytes, sizeof(bytes));
+}
+
 void write_tiny_npy(const std::filesystem::path &filepath,
                     const std::vector<float> &values,
                     uint32_t rows,
                     uint32_t cols,
                     const std::string &descr = "<f4",
-                    bool fortran_order = false) {
+                    bool fortran_order = false,
+                    uint8_t major = 1) {
   std::ofstream writer(filepath, std::ios::binary);
   const char magic[] = "\x93NUMPY";
   writer.write(magic, 6);
-  const uint8_t major = 1;
   const uint8_t minor = 0;
   writer.write(reinterpret_cast<const char *>(&major), sizeof(major));
   writer.write(reinterpret_cast<const char *>(&minor), sizeof(minor));
@@ -56,12 +69,16 @@ void write_tiny_npy(const std::filesystem::path &filepath,
   std::string header = "{'descr': '" + descr +
                        "', 'fortran_order': " + std::string(fortran_order ? "True" : "False") +
                        ", 'shape': (" + std::to_string(rows) + ", " + std::to_string(cols) + "), }";
-  while ((10 + header.size() + 1) % 16 != 0) {
+  const size_t preamble_size = major == 1 ? 10 : 12;
+  while ((preamble_size + header.size() + 1) % 16 != 0) {
     header.push_back(' ');
   }
   header.push_back('\n');
-  auto header_len = static_cast<uint16_t>(header.size());
-  writer.write(reinterpret_cast<const char *>(&header_len), sizeof(header_len));
+  if (major == 1) {
+    write_little_endian_u16(writer, static_cast<uint16_t>(header.size()));
+  } else {
+    write_little_endian_u32(writer, static_cast<uint32_t>(header.size()));
+  }
   writer.write(header.data(), static_cast<std::streamsize>(header.size()));
   writer.write(reinterpret_cast<const char *>(values.data()),
                static_cast<std::streamsize>(values.size() * sizeof(float)));
@@ -235,6 +252,33 @@ TEST(ParserTest, ParseJsonLineHandlesScalarsArraysAndEscapes) {
   EXPECT_EQ(*as_string((*items)[1]), "two");
 }
 
+TEST(ParserTest, ParseJsonLineDecodesUnicodeEscapesAndSurrogatePairs) {
+  auto root =
+      parse_json_line(R"({"euro":"\u20AC","gclef":"\uD834\uDD1E","emoji":"\uD83D\uDE00"})");
+  auto *object = as_object(root);
+  ASSERT_NE(object, nullptr);
+
+  const std::string euro = {static_cast<char>(0xE2), static_cast<char>(0x82),
+                            static_cast<char>(0xAC)};
+  const std::string gclef = {static_cast<char>(0xF0), static_cast<char>(0x9D),
+                             static_cast<char>(0x84), static_cast<char>(0x9E)};
+  const std::string emoji = {static_cast<char>(0xF0), static_cast<char>(0x9F),
+                             static_cast<char>(0x98), static_cast<char>(0x80)};
+
+  ASSERT_NE(find_any(*object, {"euro"}), nullptr);
+  ASSERT_NE(find_any(*object, {"gclef"}), nullptr);
+  ASSERT_NE(find_any(*object, {"emoji"}), nullptr);
+  EXPECT_EQ(*as_string(*find_any(*object, {"euro"})), euro);
+  EXPECT_EQ(*as_string(*find_any(*object, {"gclef"})), gclef);
+  EXPECT_EQ(*as_string(*find_any(*object, {"emoji"})), emoji);
+}
+
+TEST(ParserTest, ParseJsonLineRejectsInvalidUnicodeSurrogates) {
+  EXPECT_THROW((void)parse_json_line(R"({"bad":"\uD834"})"), std::runtime_error);
+  EXPECT_THROW((void)parse_json_line(R"({"bad":"\uD834\u0041"})"), std::runtime_error);
+  EXPECT_THROW((void)parse_json_line(R"({"bad":"\uDD1E"})"), std::runtime_error);
+}
+
 TEST(ParserTest, LoadNpyFloatMatrixHonorsMaxRowsAndRejectsUnsupportedHeaders) {
   auto dir = std::filesystem::temp_directory_path() / "alayalite_parser_test";
   std::filesystem::remove_all(dir);
@@ -246,6 +290,13 @@ TEST(ParserTest, LoadNpyFloatMatrixHonorsMaxRowsAndRejectsUnsupportedHeaders) {
   EXPECT_EQ(matrix.rows_, 2);
   EXPECT_EQ(matrix.cols_, 2);
   EXPECT_EQ(matrix.data_, (std::vector<float>{1.0F, 2.0F, 3.0F, 4.0F}));
+
+  auto v2_file = dir / "valid_v2.npy";
+  write_tiny_npy(v2_file, {7.0F, 8.0F}, 1, 2, "<f4", false, 2);
+  auto v2_matrix = load_npy_float_matrix(v2_file);
+  EXPECT_EQ(v2_matrix.rows_, 1);
+  EXPECT_EQ(v2_matrix.cols_, 2);
+  EXPECT_EQ(v2_matrix.data_, (std::vector<float>{7.0F, 8.0F}));
 
   auto invalid_descr = dir / "invalid_descr.npy";
   write_tiny_npy(invalid_descr, {1.0F, 2.0F}, 1, 2, "<f8", false);
