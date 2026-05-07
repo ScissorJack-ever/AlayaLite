@@ -87,7 +87,7 @@ target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 # ============================================================================
 if(BUILD_TESTING)
   include(CTest)
-  find_package(GTest)
+  find_package(GTest REQUIRED)
   set(GTEST_LIBS GTest::gtest GTest::gtest_main)
   add_subdirectory(tests)
 endif()
